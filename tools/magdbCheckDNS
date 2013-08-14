@@ -1,0 +1,97 @@
+#!/usr/bin/env python2.6
+# coding=utf8
+import csv
+import sys
+import psycopg2
+import string
+from socket import gethostbyname_ex
+from socket import gethostbyaddr
+import datetime
+import prettytable
+import argparse
+import json
+import ConfigParser
+
+config = ConfigParser.ConfigParser()
+config.read(['/etc/magdb/magdb.conf'])
+
+CS = config.get("database", "psycopg2")
+
+INFO_TEXT = "Checked %d IPs, following errors found:"
+
+def check_dns(table, hostname, ip_address, host_updater, ip_updater):
+    try:
+        name_info = gethostbyaddr(ip_address)
+        dns_name = name_info[0]
+    except:
+        dns_name = None
+
+    try:
+        ip_info = gethostbyname_ex(hostname)
+        ips = ip_info[2]
+    except:
+        ips = None
+
+    reason = []
+
+    if not dns_name:
+        dns_name = ""
+        reason.append("No Reverse DNS")
+
+    if not ips:
+        ips = []
+        reason.append("No Forward DNS")
+
+    if dns_name <> "" and dns_name != hostname:
+        reason.append("Reverse DNS Mismatch")
+
+    if ips <> [] and ip_address not in ips:
+        reason.append("IP Mismatch")
+
+    if reason:
+        table.add_row([hostname, ip_address, dns_name, ", ".join(ips), host_updater, ip_updater, ", ".join(reason)])
+
+
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--format", dest="format", action="store", choices=["html", "json"], help="Output format")
+    args = parser.parse_known_args()[0]
+
+    table = prettytable.PrettyTable(["FQDN In MagDB", "IP in MagDB", "Reverse DNS", "Forward DNS", "Host Updated By", "IP Updated By", "Reasons for being flagged"])
+
+    try:
+        conn=psycopg2.connect(CS)
+    except:
+        print 'Error: Unable to connect to database!'
+
+    cur = conn.cursor()
+
+    #selecting all hostnames with their ips from magDB
+    cur.execute("""SELECT name, "domainName", "ipAddress", h."lastUpdatedBy", ha."lastUpdatedBy" FROM hostnames h, domains d, "hostAddresses" ha WHERE h."domainId" = d.id AND h."hostAddressId" = ha.id""")
+    host_domain_ip_list = cur.fetchall()
+    conn.commit()
+
+
+    #checking DNS entry for all hostnames
+    if host_domain_ip_list:
+        for hostname, domain_name, ip_address, host_updater, ip_updater in host_domain_ip_list:
+            check_dns(table, hostname+'.'+domain_name, ip_address, host_updater, ip_updater)
+
+    cur.close()
+    conn.close()
+    if args.format == "html":
+        print('<!DOCTYPE HTML><html lang=en><head><title>MagDB DNS Check</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
+        print('<div class="head"><h1>MagDB DNS Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
+        print (("<h2>"+INFO_TEXT+"</h2>") % (len(host_domain_ip_list)))
+        table.print_html(sortby="FQDN In MagDB")
+        print("</body></html>");
+    elif args.format == "json":
+        print(json.dumps({"aoColumns" : table.fields, "aaData" : table.rows}))
+    else:
+        print("MagDB DNS Status as of %s" % datetime.datetime.now())
+        print (INFO_TEXT % (len(host_domain_ip_list)))
+        table.printt(sortby="FQDN In MagDB")
+
+
