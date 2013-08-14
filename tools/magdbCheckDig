@@ -1,0 +1,151 @@
+#!/usr/bin/env python2.6
+# coding=utf8
+import csv
+import sys
+import psycopg2
+import string
+from socket import gethostbyname
+from socket import gethostbyname_ex
+from socket import gethostbyaddr
+import datetime
+import prettytable
+import argparse
+import json
+from subprocess import Popen, PIPE
+from magdb import Magdb
+import string
+import logging
+import ConfigParser
+
+config = ConfigParser.ConfigParser()
+config.read(['/etc/magdb/magdb.conf'])
+
+CS = config.get("database", "psycopg2")
+NS = config.get("dig", "nameserver")
+ZONES = config.get("dig", "zones")
+
+INFO_TEXT = "Checked %d records, following errors found:"
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--format", dest="format", action="store", choices=["html", "json"], help="Output format")
+    parser.add_argument("--debug", dest="debug", action="store_true", help="Debug output")
+    args = parser.parse_known_args()[0]
+
+    #Set up logging
+    logger = logging.getLogger('magdbCheckDig')
+    logHandler = logging.StreamHandler()
+    logHandler.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+    logger.addHandler(logHandler)
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+
+    table = prettytable.PrettyTable(["FQDN", "Problem"])
+
+    master_list = {}
+
+    # Get list from magDB
+    try:
+        m = Magdb(CS)
+    except:
+        logger.error('Error: Unable to connect to magDB database!')
+        logger.error(sys.exc_info()[1])
+        return False
+
+    #get magdb domains
+    domains = m.session.query(m.domains.columns["domainName"]).all()
+    domains = [d[0] for d in domains] # Untuple
+    logger.debug("DOMAINS: %s " % (domains))
+
+
+    # perform zone transfers
+    records = []
+    for zone in ZONES
+        records += Popen(["dig", NS, zone, "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+
+    dns_records = {}
+
+    for r in records:
+        if r and r[0] <> ";" and "CNAME" not in r:
+            r = r.split()
+            if len(r) == 5:
+                fqdn, ttl, cl, type, data = r
+                if type == "A" and ttl == "7200":
+                    fqdn = fqdn.strip(".")
+                    name, domain = fqdn.split(".", 1)
+                    name = name.strip(".")
+                    domain = domain.strip(".")
+                    if unicode(domain) in domains:
+                        logger.debug("ACCEPT: %s %s %s" % (r, name, domain))
+                        dns_records["%s;%s" % (fqdn, data)] = "DNS"
+                    else:
+                        logger.debug("NOT_DOM: %s %s %s" % (r, name, domain))
+                else:
+                    logger.debug("NOT_A: %s" % r)
+            else:
+                logger.debug("NOT_REC: %s" % r)
+
+
+    # Get all hostnames with their ips (dns records) from magDB
+    magdb_records = m.session.query(m.view.columns["fqdn"], m.view.columns["ipAddress"]).filter('"fqdn" not like \'%.internal\' and not "ipAddress" << \'10.0.0.0/8\'').all()
+
+    # Delete Records that appear in both systems, anything that remains is inconsistent data
+    for r in magdb_records:
+        if r.fqdn.split(".",1)[1] in domains:
+            r = "%s;%s" % r
+            if r in dns_records:
+                del dns_records[r]
+            else:
+                dns_records[r] = "magDB"
+        else:
+            logger.debug("IGNORE: %s <-> %s" % r)
+
+    # Collate problems by hostname
+    problems = {}
+    for r, f in dns_records.iteritems():
+        h,i = r.split(";")
+        if h not in problems:
+            problems[h] = []
+        problems[h].append((i, f))
+
+    # Collate problems by IP
+    ip_problems = {}
+    for r, f in dns_records.iteritems():
+        h,i = r.split(";")
+        if i not in problems:
+            ip_problems[i] = []
+        ip_problems[i].append((h, f))
+
+    # Build table and diagnose problems
+    for h, p in problems.iteritems():
+        s = ", ".join([" in ".join(r) for r in p])
+        if len(p) > 1:
+            if "magDB" in s and "DNS" in s:
+                s = "Inconsistency: " + s
+            else:
+                s = "RR with TTL of 7200: " + s
+        else:
+            s = s.replace("in", "only in")
+            s = "Missing Record: " + s
+            if "magDB" in s:
+                s += " (Host updated by %s)" % m.session.query(m.hostnames.columns["lastUpdatedBy"]).filter(m.hostnames.columns["name"] == h.split(".", 1)[0]).first().lastUpdatedBy
+        table.add_row([h, s])
+
+    # Same for IPs (There shouldn't be many of these)
+    for i, p in ip_problems.iteritems():
+        s = ", ".join([" in ".join(r) for r in p])
+        if len(p) > 1:
+            table.add_row([i, s])
+
+
+    # Output
+    if args.format == "html":
+        table.print_html(sortby="FQDN")
+    elif args.format == "json":
+        print(json.dumps({"aoColumns" : table.fields, "aaData" : table.rows}))
+    else:
+        table.printt(sortby="FQDN")
+
+if __name__ == "__main__":
+    main()
