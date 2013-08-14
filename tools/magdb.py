@@ -261,7 +261,7 @@ class Magdb:
         """"""
         h_list = fqdn_target.split('.',1)
         if len(h_list) == 1:
-            h_list.append("gridpp.rl.ac.uk")
+            h_list.append(DEFAULT_DOMAIN)
 
         hostname = self.session.query(self.tables["hostnames"]).filter(self.tables["domains"].columns["id"] == self.tables["hostnames"].columns["domainId"]).filter(self.tables["domains"].columns["domainName"]==h_list[1]).filter(self.tables["hostnames"].columns["name"] == h_list[0]).first()
         if not hostname:
@@ -301,7 +301,7 @@ class Magdb:
         if target:
             h_list = target.split('.',1)
             if len(h_list) == 1:
-                h_list.append("gridpp.rl.ac.uk")
+                h_list.append(DEFAULT_DOMAIN)
 
             old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(hostnames.columns["name"] == h_list[0]).first()
 
@@ -330,7 +330,7 @@ class Magdb:
             h_list = fqdn.split('.',1)
 
             if len(h_list) == 1:
-                h_list.append("gridpp.rl.ac.uk")
+                h_list.append(DEFAULT_DOMAIN)
 
             old_alias = self.session.query(aliases).filter(domains.columns["id"] == aliases.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(aliases.columns["name"] == h_list[0]).first()
 
