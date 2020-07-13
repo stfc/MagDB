@@ -92,7 +92,7 @@ def main():
 
     # Delete Records that appear in both systems, anything that remains is inconsistent data
     for r in magdb_records:
-        if r.fqdn.split(".",1)[1] in domains:
+        if r.fqdn.split(".", 1)[1] in domains:
             r = "%s;%s" % r
             if r in dns_records:
                 del dns_records[r]
@@ -104,7 +104,7 @@ def main():
     # Collate problems by hostname
     problems = {}
     for r, f in dns_records.iteritems():
-        h,i = r.split(";")
+        h, i = r.split(";")
         if h not in problems:
             problems[h] = []
         problems[h].append((i, f))
@@ -112,7 +112,7 @@ def main():
     # Collate problems by IP
     ip_problems = {}
     for r, f in dns_records.iteritems():
-        h,i = r.split(";")
+        h, i = r.split(";")
         if i not in problems:
             ip_problems[i] = []
         ip_problems[i].append((h, f))
@@ -143,7 +143,7 @@ def main():
     if args.format == "html":
         table.print_html(sortby="FQDN")
     elif args.format == "json":
-        print(json.dumps({"aoColumns" : table.fields, "aaData" : table.rows}))
+        print(json.dumps({"aoColumns": table.fields, "aaData": table.rows}))
     else:
         table.printt(sortby="FQDN")
 
