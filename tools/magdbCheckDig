@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python2
 # coding=utf8
 import csv
 import sys
@@ -15,15 +15,8 @@ from subprocess import Popen, PIPE
 from magdb import Magdb
 import string
 import logging
-import ConfigParser
 
-config = ConfigParser.ConfigParser()
-config.read(['/etc/magdb/magdb.conf'])
-
-CS = config.get("database", "psycopg2")
-NS = config.get("dig", "nameserver")
-ZONES = config.get("dig", "zones")
-
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
 INFO_TEXT = "Checked %d records, following errors found:"
 
 def main():
@@ -53,19 +46,20 @@ def main():
         logger.error(sys.exc_info()[1])
         return False
 
-    #get magdb domains
-    domains = m.session.query(m.domains.columns["domainName"]).all()
+    #get magdb domains (ignore a few key private domains)
+    domains = m.session.query(m.domains.columns["domainName"]).filter(~ m.domains.columns["id"].in_([4,5,7,9])).all()
     domains = [d[0] for d in domains] # Untuple
     logger.debug("DOMAINS: %s " % (domains))
 
 
     # perform zone transfers
-    records = []
-    for zone in ZONES
-        records += Popen(["dig", NS, zone, "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+    records = Popen(["dig", "@ns2.rl.ac.uk", "rl.ac.uk", "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+    #records += Popen(["dig", "@ns2.rl.ac.uk", "clrc.ac.uk", "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+    #records += Popen(["dig", "@ns2.rl.ac.uk", "cclrc.ac.uk", "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+    records += Popen(["dig", "@ns2.rl.ac.uk", "stfc.ac.uk", "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
 
     dns_records = {}
-
+    
     for r in records:
         if r and r[0] <> ";" and "CNAME" not in r:
             r = r.split()
@@ -102,7 +96,7 @@ def main():
             logger.debug("IGNORE: %s <-> %s" % r)
 
     # Collate problems by hostname
-    problems = {}
+    problems = {}    
     for r, f in dns_records.iteritems():
         h,i = r.split(";")
         if h not in problems:
@@ -130,8 +124,11 @@ def main():
             s = "Missing Record: " + s
             if "magDB" in s:
                 s += " (Host updated by %s)" % m.session.query(m.hostnames.columns["lastUpdatedBy"]).filter(m.hostnames.columns["name"] == h.split(".", 1)[0]).first().lastUpdatedBy
-        table.add_row([h, s])
-
+        if (h.endswith('.stfc.ac.uk') or h.endswith('.cse.rl.ac.uk') or h.endswith('.net.rl.ac.uk') or h.endswith('.escdc.fed.cclrc.ac.uk')) and s.endswith('only in DNS'):
+            logger.debug("Ignored problem with host %s in shared domain", h)
+        else:
+            table.add_row([h, s])
+    
     # Same for IPs (There shouldn't be many of these)
     for i, p in ip_problems.iteritems():
         s = ", ".join([" in ".join(r) for r in p])
@@ -146,6 +143,6 @@ def main():
         print(json.dumps({"aoColumns" : table.fields, "aaData" : table.rows}))
     else:
         table.printt(sortby="FQDN")
-
+    
 if __name__ == "__main__":
     main()

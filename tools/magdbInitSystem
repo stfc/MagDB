@@ -1,4 +1,6 @@
-#!/usr/bin/python2.6
+#!/usr/bin/python2
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
 
 import magdb
 import re
@@ -7,7 +9,6 @@ import socket
 import sqlalchemy
 import prettytable
 import argparse
-import ConfigParser
 from socket import gethostbyname_ex
 from socket import gethostbyaddr
 
@@ -16,13 +17,9 @@ from magdb_cli_tools import *
 RE_MAC = re.compile("([a-fA-F0-9]{2}:?){6}")
 RE_FQDN = re.compile("^[a-zA-Z0-9\-.]{1,}$")
 
-config = ConfigParser.ConfigParser()
-config.read(['/etc/magdb/magdb.conf'])
 
-CS = config.get("database", "sqlalchemy")
-
-
-def main():
+  
+def main(user_name):
   parser = argparse.ArgumentParser() #"""[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
 
   parser.add_argument("--vendor", dest="vendor", help="Name of system vendor")
@@ -34,16 +31,17 @@ def main():
   parser.add_argument("--mac", dest="mac", help="MAC address of eth0 on system")
   parser.add_argument("--ip", dest="ip", help="Desired IP address of system")
   parser.add_argument("--fqdn", dest="fqdn", help="Desired FQDN of system")
+  parser.add_argument("--servicetag", dest="servicetag", help="Service Tag or Serial Number of system (optional)")
 
   args = parser.parse_known_args()
 
   print("""
-                       ____  ____
- _ __ ___   __ _  __ _|  _ \| __ )
-| '_ ` _ \ / _` |/ _` | | | |  _ \
+                       ____  ____  
+ _ __ ___   __ _  __ _|  _ \| __ ) 
+| '_ ` _ \ / _` |/ _` | | | |  _ \ 
 | | | | | | (_| | (_| | |_| | |_) |
-|_| |_| |_|\__,_|\__, |____/|____/
-                 |___/
+|_| |_| |_|\__,_|\__, |____/|____/ 
+                 |___/ 
 """)
   print("MagDB System Initiator")
   print("This tool allocates a system ID and creates entries for a NEW server")
@@ -53,7 +51,7 @@ def main():
   # Connect to magdb
   m = magdb.Magdb(CS)
 
-  # Check any provided arguments
+  # Check any provided arguments  
   vendor = valid(m, "vendor", m.vendors, m.vendors.columns["vendorName"], args[0].vendor)
   rack = valid(m, "rack", m.racks, m.racks.columns["id"], args[0].rack)
   pos = args[0].pos
@@ -63,55 +61,56 @@ def main():
   mac = args[0].mac
   ip = unused(m, "IP address", m.hostAddresses, m.hostAddresses.columns["ipAddress"], args[0].ip)
   fqdn = unused(m, "FQDN", m.view, m.view.columns["fqdn"], args[0].fqdn)
+  servicetag = args[0].servicetag
 
   # Vendor
   if not vendor:
     print("System vendor?")
     vendor = getValid(m, "vendor", m.vendors, m.vendors.columns["vendorName"])
     printRecord(vendor)
-
+  
   # Rack ID
   if not rack:
     print("Rack ID?")
     rack = getValid(m, "rack", m.racks, m.racks.columns["id"])
     printRecord(rack)
-
+  
   # Position
   if not pos:
     print("Position in rack? (lowest unit occupied, use zero for vertically mounted PDUs)")
     pos = getInteger(0, 42)
-
+  
   # Rack Units
   if not units:
     print("Number of rack units? (use zero for vertically mounted PDUs)")
     units = getInteger(0, 42-pos+1)
-
+  
   # Category
   if not category:
     print("System type/category?")
     category = getValid(m, "category", m.categories, m.categories.columns["categoryName"])
   printRecord(category)
-
+  
   # Manufacturer
   if not manufacturer:
     print("System manufacturer?")
     manufacturer = getValid(m, "manufacturer", m.manufacturers, m.manufacturers.columns["manufacturerName"])
   printRecord(manufacturer)
-
+  
   # MAC address
   if not mac:
     print("MAC Address?")
     mac = getMAC(m)
-
+  
   # IP address
   if not ip:
-    print("IP Address?")
+    print("IP Address?") 
     t = prettytable.PrettyTable(m.networkSubnets.columns.keys())
     for s in m.session.query(m.networkSubnets).all():
       t.add_row(s)
     t = "Must be in one of the following subnets:\n" + t.get_string()
     ip = getIP(m, t)
-
+  
   # FQDN
   if not fqdn:
     print("Fully Qualified Domain Name?")
@@ -120,7 +119,7 @@ def main():
       t.add_row(s)
     t = "Must be unique and in one of the following domains:\n" + t.get_string()
     fqdn = getFQDN(m, t)
-
+  
   t = prettytable.PrettyTable(["Property", "Value"])
   t.add_row(["Vendor", vendor.id])
   t.add_row(["Rack ID", rack.id])
@@ -131,9 +130,11 @@ def main():
   t.add_row(["MAC Address", mac])
   t.add_row(["IP Address", ip])
   t.add_row(["FQDN", fqdn])
+  if servicetag:
+    t.add_row(["serviceTag", servicetag])
   print("INFO: Will commit the following to magDB:")
   t.printt()
-
+  
   # Make changes to DB (within transaction)
   c = m.systems.columns
   i = m.systems.insert(
@@ -145,16 +146,18 @@ def main():
       c["categoryId"] : category.id,
       c["lifestageId"] : 1,
       c["manufacturerId"] : manufacturer.id,
+      c["lastUpdatedBy"] : user_name,
+      c["serviceTag"] : servicetag,
     }
   )
-
+  
   # Check primary key a.k.a. system ID
   system_id = m.session.execute(i).inserted_primary_key
-
+  
   if system_id is not None and len(system_id) == 1:
     system_id = system_id[0]
     print("INFO: Allocated System ID %i" % system_id)
-
+    
     c = m.networkInterfaces.columns
     i = m.networkInterfaces.insert(
       values = {
@@ -163,9 +166,10 @@ def main():
         c["systemId"] : system_id,
         c["networkInterfaceTypeId"] : 2,
         c["isBootInterface"] : True,
+        c["lastUpdatedBy"] : user_name,
       }
     )
-
+    
     # Run through changes
     if m.session.execute(i):
       if m.add_ip(ip, mac):
@@ -191,7 +195,7 @@ if __name__ == "__main__":
 
   if user.lower() <> 'root':
     try:
-      main()
+      main(user)
     except KeyboardInterrupt:
       print("\nINFO: User Aborted")
   else:

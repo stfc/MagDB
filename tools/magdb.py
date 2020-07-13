@@ -1,18 +1,13 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python2
 # coding=utf8
 # vi:ts=4:
 
 """Package containing interfaces to Magdb"""
 
+DEFAULT_DOMAIN = "gridpp.rl.ac.uk"
+
 import sys
 import prettytable
-import ConfigParser
-
-config = ConfigParser.ConfigParser()
-config.read(['/etc/magdb/magdb.conf'])
-
-DEFAULT_DOMAIN = config.get("defaults", "domain")
-CS = config.get("database", "sqlalchemy")
 
 class MagdbRecord:
     """Class defining a complete host network record"""
@@ -23,22 +18,22 @@ class MagdbRecord:
         self.ip = ip
         self.fqdn = fqdn
         self.aliases = []
-
+        
     def __str__(self):
         t = prettytable.PrettyTable(("SystemID", "MAC", "IP", "FQDN", "Aliases"))
         als = ""
         for a in self.aliases:
             als += "%s\n%s" % (als, a)
-
+        
         t.add_row((self.id, self.mac, self.ip, self.fqdn, als))
 
         result = t.printt()
-
+        
         if t is not None:
             return(result)
         else:
             return("Nada")
-
+    
     def __repr__(self):
         return("__ not implemented")
 
@@ -62,9 +57,26 @@ class Magdb:
 
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)
-
+        
         self.view = Table("vNetwork2", self.metadata, Column("systemId", Integer), Column("macAddress", Integer), Column("ipAddress", Integer, primary_key=True),Column("fqdn", Integer) , autoload_with=self.engine)
         self.view_aliases = Table("vAliases", self.metadata, Column("hostnameId", Integer, primary_key=True), Column("aliasId", Integer, primary_key=True), Column("alias", String), Column("aliasDomian", String),Column("host", String),Column("hostDomain", String), autoload_with=self.engine)
+        self.view_build_template = Table(
+            "vBuildTemplate",
+            self.metadata,
+            Column("systemId", String),
+            Column("systemHostname", String),
+            Column("roomBuilding", String),
+            Column("roomName", String),
+            Column("systemRackPos", Integer),
+            Column("rackId", Integer),
+            Column("rackRow", Integer),
+            Column("rackCol", Integer),
+            Column("categoryName", String),
+            Column("vendorName", String),
+            Column("lifestageName", String),
+            Column("serviceTag", String),
+            autoload_with=self.engine
+        )
 
         self.tables = self.metadata.tables
         self.hostnames = Table('hostnames', self.metadata, autoload=True)
@@ -82,6 +94,7 @@ class Magdb:
         self.categories = self.tables["categories"]
         self.manufacturers = self.tables["manufacturers"]
         self.ipSurvey = self.tables["ipSurvey"]
+        self.storageSystems = self.tables["storageSystems"]
 
         from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=self.engine)
@@ -123,14 +136,14 @@ class Magdb:
         vn = self.session.query(self.view).filter(self.view.columns["fqdn"] == fqdn).first()
         if vn:
             result = MagdbRecord(vn[0], vn[1], vn[2], vn[3])
-
+                
             hostname = self.session.query(self.hostnames).filter(self.domains.columns["id"] == self.hostnames.columns["domainId"]).filter(self.domains.columns["domainName"]==d).filter(self.hostnames.columns["name"] == h).first()
             aliases = self.session.query(self.view_aliases).filter(self.view_aliases.columns["hostnameId"] == hostname.id).all()
-
+            
             if aliases:
                 for a in aliases:
                     result.aliases.append(a.alias + "." + a.aliasDomian)
-
+            
             return(result)
         else:
             return(None)
@@ -140,13 +153,13 @@ class Magdb:
         """"""
         h, d = self.split_fqdn(fqdn)
         fqdn = "%s.%s" % (h, d)
-
-        try:
+        
+        try:    
             alias = self.session.query(view_aliases).filter(self.view_aliases.columns["alias"] == h).filter(self.view_aliases.columns["aliasDomian"] == d).first()
             print "hostname: " + alias.host + '.' + alias.hostDomain
         except:
             print("Alias not found")
-            sys.exit(3)
+            sys.exit(3)        
 
 
     def info_ip(self, ip):
@@ -167,15 +180,15 @@ class Magdb:
         """"""
         c_h, c_d = self.split_fqdn(current_fqdn)
         current_fqdn = "%s.%s" % (c_h, c_d)
-
+            
         old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(hostnames.columns["name"] == c_h).first()
         if not old_hostname:
             raise MagdbError("Hostname does not exist")
-
+        
         (new_name, domain_id) = get_hostname(new_fqdn)
-
+                
         operation = update(hostnames,hostnames.columns["id"]==old_hostname.id, values={hostnames.columns["name"] : new_name, hostnames.columns["domainId"] : domain_id, hostnames.columns["lastUpdatedBy"] : user_name})
-
+        
         try:
             self.session.execute(operation)
         except:
@@ -190,7 +203,7 @@ class Magdb:
                 raise MagdbError("IP not found")
         except:
             raise MagdbError("Invalid IP")
-
+        
         try:
             operation = update(hostAddresses,
                 hostAddresses.columns["id"]==old_host_address.id,
@@ -203,7 +216,7 @@ class Magdb:
         except:
             raise MagdbError("Dodgy IP while performing DB operation")
 
-
+        
     def add_ip(self, ip, mac):
         """Find interface with specified mac and allocate IP to it, returns nothing, throws MagdbError if problems occur"""
         try:
@@ -212,18 +225,18 @@ class Magdb:
                 return(False)
         except:
             raise MagdbError("Malformed MAC address")
-
+        
         insert_stmt = self.hostAddresses.insert(
             values={
                 self.hostAddresses.columns["ipAddress"] : ip,
                 self.hostAddresses.columns["networkInterfaceId"] : network_inter.id
             }
         )
-
+        
         if self.session.execute(insert_stmt):
             return(True)
-
-
+    
+    
     def add_host(self, fqdn, ip, user_name):
         """"""
         host_address = self.session.query(self.hostAddresses).filter(self.hostAddresses.columns["ipAddress"] == ip).first()
@@ -233,17 +246,17 @@ class Magdb:
         #except:
         #    print 'wrong ip address'
         #    return(False)
-
-        h_list = fqdn.split('.',1)
+        
+        h_list = fqdn.split('.',1)    
         if len(h_list) == 1:
             print 'Wrong hostname name.domain'
             return(False)
-
+            
         d = self.session.query(self.domains).filter(self.domains.columns["domainName"] == h_list[1]).first()
         if not d:
             print "Domain " + h_list[1] + " does not exist"
             return(False)
-
+            
         c = self.hostnames.columns
         insert_stmt = self.hostnames.insert(
             values = {
@@ -259,33 +272,33 @@ class Magdb:
 
     def add_alias(self, fqdn_alias, fqdn_target, user_name):
         """"""
-        h_list = fqdn_target.split('.',1)
+        h_list = fqdn_target.split('.',1)        
         if len(h_list) == 1:
-            h_list.append(DEFAULT_DOMAIN)
-
+            h_list.append("gridpp.rl.ac.uk")
+        
         hostname = self.session.query(self.tables["hostnames"]).filter(self.tables["domains"].columns["id"] == self.tables["hostnames"].columns["domainId"]).filter(self.tables["domains"].columns["domainName"]==h_list[1]).filter(self.tables["hostnames"].columns["name"] == h_list[0]).first()
         if not hostname:
             print 'specified hostname does not exist'
             return(False)
-
-        a_list = fqdn_alias.split('.',1)
+        
+        a_list = fqdn_alias.split('.',1)    
         if len(a_list) == 1:
             print 'Wrong alias name name.domain'
             return(False)
-
+            
         d = self.session.query(self.tables["domains"]).filter(self.tables["domains"].columns["domainName"] == a_list[1]).first()
         if not d:
             print "Domain " + h_list[1] + " does not exist"
             sys.exit(3)
-
+        
         try:
             insert_stmt = self.tables["aliases"].insert(values={self.tables["aliases"].columns["name"] : a_list[0], self.tables["aliases"].columns["domainId"] : d.id, self.tables["hostnames"].columns["lastUpdatedBy"] : user_name})
             print insert_stmt
             self.session.execute(insert_stmt)
             self.session.commit()
-
+                
             new_alias = self.session.query(self.tables['aliases']).filter(self.tables['aliases'].columns['domainId'] == d.id).filter(self.tables['aliases'].columns['name'] == a_list[0] ).first()
-
+                
             insert_stmt = self.tables["hostnamesAliases"].insert(values={self.tables["hostnamesAliases"].columns["hostnameId"] : hostname.id, self.tables["hostnamesAliases"].columns["aliasId"] : new_alias.id, tables["hostnames"].columns["lastUpdatedBy"] : user_name})
             print insert_stmt
             self.session.execute(insert_stmt)
@@ -299,16 +312,16 @@ class Magdb:
     def remove_host(self, fqdn, cascade):
         """"""
         if target:
-            h_list = target.split('.',1)
+            h_list = target.split('.',1)        
             if len(h_list) == 1:
-                h_list.append(DEFAULT_DOMAIN)
-
+                h_list.append("gridpp.rl.ac.uk")
+                
             old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(hostnames.columns["name"] == h_list[0]).first()
-
+        
             if old_hostname:
-
+                
                 aliases = self.session.query(view_aliases).filter(self.view_aliases.columns["hostnameId"] == old_hostname.id).all()
-
+                
                 if not aliases or (aliases and cascade):
                     try:
                         delete_stmt = delete(hostnames,hostnames.columns["id"]==old_hostname.id)
@@ -323,17 +336,17 @@ class Magdb:
                 print "No such hostname"
                 sys.exit(3)
 
-
+        
     def remove_alias(self, fqdn):
         """"""
         if fqdn:
             h_list = fqdn.split('.',1)
-
+            
             if len(h_list) == 1:
-                h_list.append(DEFAULT_DOMAIN)
-
+                h_list.append("gridpp.rl.ac.uk")
+                
             old_alias = self.session.query(aliases).filter(domains.columns["id"] == aliases.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(aliases.columns["name"] == h_list[0]).first()
-
+            
             if old_alias:
                 try:
                     delete_stmt = delete(aliases,aliases.columns["id"]==old_alias.id)
@@ -352,7 +365,7 @@ class Magdb:
         except:
             print 'wrong ip address'
             sys.exit(3)
-
+        
         if old_host_address:
             vn = self.session.query(view).filter(self.view.columns["ipAddress"] == target).all()
             if not vn or (vn and cascade):
@@ -365,7 +378,7 @@ class Magdb:
                     sys.exit(3)
             else:
                 print 'to delete ip address which has hostname(s) type --cascade'
-                sys.exit(3)
+                sys.exit(3)                
         else:
             print "No such IP address in database"
             sys.exit(3)
