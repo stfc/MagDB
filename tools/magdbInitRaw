@@ -1,0 +1,209 @@
+#!/usr/bin/python2
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+import magdb
+import re
+import readline
+import sqlalchemy
+import prettytable
+import argparse
+
+def get(m, name, table, column):
+  i = raw_input("> ")
+  if i == "?":
+    t = prettytable.PrettyTable(table.columns.keys())
+    q = m.session.query(table)
+    for e in q.all():
+      t.add_row(e)
+    t.printt()
+    return(None)
+  return(i)
+
+
+def valid(m, name, table, column, i):
+  r = m.session.query(table).filter(column == i).first()
+  if r is None:
+    print("ERROR: %s %s not found, try again" % (name.title(), i))
+  return(r)
+
+
+def getValid(m, name, table, column):
+  r = None
+  while r is None:
+    i = get(m, name, table, column)
+    if i is not None:
+      r = valid(m, name, table, column, i)
+      return(r)
+  
+  
+def getInteger(lower, upper):
+  invalid = True
+  while invalid:
+    i = raw_input("> ")
+    try:
+      r = int(i)
+      if (r is not None) and (lower <= r <= upper):
+        invalid = False
+      else:
+        print("ERROR: Input must be between %i and %i" % (lower, upper))
+    except ValueError:
+      print("ERROR: Input must be an integer between %i and %i" % (lower, upper))
+  print("OK")
+  return(r)
+      
+
+def unused(m, name, table, column, i):
+  try:
+    r = m.session.query(table).filter(column == i).first()
+    if r is None:
+      return(i)
+    else:
+      print("ERROR: %s is in use, please specify another" % name)
+  except sqlalchemy.exc.DataError:
+    print("ERROR: Must be a valid %s" % name)
+    m.session.rollback()
+
+  return(None)
+
+
+def getUnused(m, name, table, column, acceptable=""):
+  invalid = True
+  while invalid:
+    i = raw_input("> ")
+    if i == "?":
+      print(acceptable)
+    else:
+      i = unused(m, name, table, column, i)
+      if i:
+        invalid = False
+  print("OK")
+  return(i)
+
+
+def printRecord(record):
+  t = prettytable.PrettyTable(record.keys())
+  t.add_row(record)
+  t.printt()
+  
+  
+def main():
+  parser = argparse.ArgumentParser() #"""[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
+
+  parser.add_argument("--vendor", dest="vendor", help="Name of system vendor")
+  parser.add_argument("--rack", dest="rack", help="ID of rack system is in")
+  parser.add_argument("--position", dest="pos", help="Lowest unit in rack occupied by system", type=int)
+  parser.add_argument("--units", dest="units", help="Height of system in units", type=int)
+  parser.add_argument("--category", dest="category", help="Category/machine-type of system")
+  parser.add_argument("--manufacturer", dest="manufacturer", help="Manufacturer")
+
+  args = parser.parse_known_args()
+
+  print("""
+                       ____  ____  
+ _ __ ___   __ _  __ _|  _ \| __ ) 
+| '_ ` _ \ / _` |/ _` | | | |  _ \ 
+| | | | | | (_| | (_| | |_| | |_) |
+|_| |_| |_|\__,_|\__, |____/|____/ 
+                 |___/ 
+""")
+  print("MagDB System Initiator")
+  print("This tool allocates a system ID and creates entries for a NEW server")
+  print("Enter ? at any time for possible values, press Ctrl+C at any time to abort")
+  print("")
+
+  # Connect to magdb
+  m = magdb.Magdb(CS)
+
+  # Check any provided arguments  
+  vendor = valid(m, "vendor", m.vendors, m.vendors.columns["vendorName"], args[0].vendor)
+  rack = valid(m, "rack", m.racks, m.racks.columns["id"], args[0].rack)
+  pos = args[0].pos
+  units = args[0].units
+  category = valid(m, "category", m.categories, m.categories.columns["categoryName"], args[0].category)
+  manufacturer = valid(m, "manufacturer", m.manufacturers, m.manufacturers.columns["manufacturerName"], args[0].manufacturer)
+
+  # Vendor
+  if not vendor:
+    print("System vendor?")
+    vendor = getValid(m, "vendor", m.vendors, m.vendors.columns["vendorName"])
+    printRecord(vendor)
+  
+  # Rack ID
+  if not rack:
+    print("Rack ID?")
+    rack = getValid(m, "rack", m.racks, m.racks.columns["id"])
+    printRecord(rack)
+  
+  # Position
+  if not pos:
+    print("Position in rack (lowest unit occupied)?")
+    pos = getInteger(1, 42)
+  
+  # Rack Units
+  if not units:
+    print("Number of rack units?")
+    units = getInteger(1, 42-pos+1)
+  
+  # Category
+  if not category:
+    print("System type/category?")
+    category = getValid(m, "category", m.categories, m.categories.columns["categoryName"])
+  printRecord(category)
+  
+  # Manufacturer
+  if not manufacturer:
+    print("System manufacturer?")
+    manufacturer = getValid(m, "manufacturer", m.manufacturers, m.manufacturers.columns["manufacturerName"])
+  printRecord(manufacturer)
+  
+  t = prettytable.PrettyTable(["Property", "Value"])
+  t.add_row(["Vendor", vendor.id])
+  t.add_row(["Rack ID", rack.id])
+  t.add_row(["Position", pos])
+  t.add_row(["Rack Units", units])
+  t.add_row(["Category", category.id])
+  t.add_row(["Manufacturer", manufacturer.id])
+  print("INFO: Will commit the following to magDB:")
+  t.printt()
+  
+  # Make changes to DB (within transaction)
+  c = m.systems.columns
+  i = m.systems.insert(
+    values = {
+      c["vendorId"] : vendor.id,
+      c["rackId"] : rack.id,
+      c["systemRackUnits"] : units,
+      c["systemRackPos"] : pos,
+      c["categoryId"] : category.id,
+      c["lifestageId"] : 1,
+      c["manufacturerId"] : manufacturer.id,
+    }
+  )
+  
+  # Check primary key a.k.a. system ID
+  system_id = m.session.execute(i).inserted_primary_key
+  
+  if system_id is not None and len(system_id) == 1:
+    system_id = system_id[0]
+    print("INFO: Allocated System ID %i" % system_id)
+    # All has worked, so commit changes to DB
+    m.session.commit()
+    print("INFO: Success. Transaction committed.")
+  else:
+    m.session.rollback()
+    print("ERROR: Did not allocate a system ID, transaction rolled back.")
+
+
+if __name__ == "__main__":
+  import getpass
+
+  user = getpass.getuser()
+
+  if user.lower() <> 'root':
+    try:
+      main()
+    except KeyboardInterrupt:
+      print("\nINFO: User Aborted")
+  else:
+    print 'ERROR: This command should not be run as root, please login as yourself and retry'

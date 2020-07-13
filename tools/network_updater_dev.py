@@ -1,0 +1,865 @@
+#!/usr/bin/env python2
+# -*- coding=utf-8 -*-
+# encoding: utf-8
+import argparse
+import sys
+import nis
+import getpass
+import time
+import logging
+
+from sqlalchemy import *
+from sqlalchemy.exc import IntegrityError, DataError
+
+from magdb import *
+
+try:
+    from netaddr import IPNetwork
+    from netaddr.core import AddrFormatError
+except ImportError:
+    logger.error('Network manipulation requires the netaddr module, which was not found')
+    exit(2)
+
+# Some globals to get started
+global session
+global metadata
+global view
+global tables
+global hostnames
+
+
+TEXT_DANGER = r'''
+ ___   _   _  _  ___ ___ ___ 
+|   \ /_\ | \| |/ __| __| _ \
+| |) / _ \| .` | (_ | _||   /
+|___/_/ \_\_|\_|\___|___|_|_\                             
+'''
+
+def sleep(n):
+    for i in range(0, n):
+        sys.stdout.write("%d..." % (n - i))
+        sys.stdout.flush()
+        time.sleep(1)
+    print "0"
+
+
+def printException():
+    logger = logging.getLogger("magdb")
+
+    logger.error('Caught Exception:')
+    if sys.exc_info():
+        e = str(sys.exc_info()[1]).splitlines()
+        for l in e:
+            if "INSERT" not in l and "DELETE" not in l:
+                logger.error("  %s" % l)
+
+
+def setup():
+    #from sqlalchemy import create_engine
+    CS = 'postgresql+psycopg2://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+    try:
+        m = Magdb(CS)
+    except:
+        logger.error('Error: Unable to connect to magDB database!')
+        logger.error(sys.exc_info()[1])
+        return False
+
+    return (m, m.metadata, m.view, m.view_aliases)
+
+
+def get_hostname(new_hostname):
+    logger = logging.getLogger("magdb")
+
+    h_list = new_hostname.split('.',1)
+    if len(h_list) == 1:
+        logger.error('Please type full NEW hostname [name.domain]')
+        sys.exit(3)
+    else:
+        d = session.query(tables["domains"]).filter(tables["domains"].columns["domainName"] == h_list[1]).first()
+        if not d:
+            logger.error("Domain %s does not exist" % h_list[1])
+            sys.exit(3)
+        else:
+            h = session.query(view).filter(view.columns["fqdn"] == h_list[0] + '.' + h_list[1]).first()
+            if h:
+                logger.error("Hostname: %s already exists" % new_hostname)
+                return sys.exit(3)
+            else:
+                return(h_list[0],d.id)
+
+
+def info_host(target):
+    logger = logging.getLogger("magdb")
+
+    h_list = target.split('.',1)
+    if len(h_list) == 1:
+        h_list.append("gridpp.rl.ac.uk")
+
+    try:
+        vn = session.query(view).filter(view.columns["fqdn"] == h_list[0] + '.' + h_list[1]).first()
+        if vn:
+            logger.info("%10s %20s %20s %30s" % vn)
+            hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+            aliases = session.query(view_aliases).filter(view_aliases.columns["hostnameId"] == hostname.id).all()
+            if aliases:
+                for a in aliases:
+                    logger.info("Alias: %s.%s" % (a.alias, a.aliasDomian))
+        else:
+            logger.error("Host not found")
+    except:
+        printException()
+        sys.exit(3)
+
+
+def info_alias(target):
+    logger = logging.getLogger("magdb")
+
+    h_list = target.split('.',1)
+    if len(h_list) == 1:
+        h_list.append("gridpp.rl.ac.uk")
+    try:
+        alias = session.query(view_aliases).filter(view_aliases.columns["alias"] == h_list[0]).filter(view_aliases.columns["aliasDomian"] == h_list[1]).first()
+        logger.info("Hostname: %s.%s" % (alias.host, alias.hostDomain))
+    except:
+        printException()
+        sys.exit(3)
+
+
+def info_ip(target):
+    logger = logging.getLogger("magdb")
+
+    try:
+        vn = session.query(view).filter(view.columns["ipAddress"] == target).all()
+        if vn != None:
+            for v in vn:
+                logger.info("\t%s\t%s\t%s\t%s" % v)
+        else:
+            logger.error("IP not found")
+    except:
+        printException()
+        sys.exit(3)
+
+
+def info_all(system_id):
+    if system_id:
+        system_query = session.query(magdb.systems).filter(tables['systems'].columns['id'] == system_id)
+        system = system_query.first()
+
+        if system:
+            print 'system%d' % system.id
+
+            id_interfaces = []
+            id_addresses = []
+            id_hostnames = []
+
+            interfaces_query = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['systemId'] == system.id)
+            interfaces = interfaces_query.all()
+            if interfaces:
+                for interface in interfaces:
+                    id_interfaces.append(interface.id)
+                    print '\tinterface%d - %s' % (interface.id, interface.name)
+        
+                    addresses_query = session.query(magdb.hostAddresses).filter(magdb.hostAddresses.columns['networkInterfaceId'] == interface.id)
+                    addresses = addresses_query.all()
+                    if addresses:
+                        for address in addresses:
+                            id_addresses.append(address.id)
+                            print '\t\taddress%d - %s' % (address.id, address.ipAddress)
+        
+                            hostnames_query = session.query(magdb.hostnames).filter(magdb.hostnames.columns['hostAddressId'] == address.id)
+                            hostnames = hostnames_query.all()
+                            if hostnames:
+                                for hostname in hostnames:
+                                    id_hostnames.append(hostname.id)
+                                    domain = session.query(magdb.domains).filter(magdb.domains.columns['id'] == hostname.domainId).first()
+                                    print '\t\t\thostname%d - %s.%s' % (hostname.id, hostname.name, domain.domainName)
+                            else:
+                                print '\t\t\t<No Hostnames>'
+                    else:
+                        print '\t\t<No Addresses>'
+            else:
+                print '\t<No Interfaces>'
+
+        return (id_interfaces, id_addresses, id_hostnames)
+
+
+def update_host(host, new_hostname):
+    logger = logging.getLogger("magdb")
+
+    h_list = host.split('.',1)
+    if len(h_list) == 1:
+        h_list.append("gridpp.rl.ac.uk")
+
+    old_hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+    logger.info("Old hostname %s in domain %s" % (h_list[0], old_hostname.domainId))
+    
+    if not old_hostname:
+        printException()
+        sys.exit(3)
+
+    (new_name, domain_id) = get_hostname(new_hostname)
+
+    logger.info("New hostname %s in domain %s" % (new_name, domain_id))
+
+    update_stmt = update(tables["hostnames"],tables["hostnames"].columns["id"]==old_hostname.id, values={
+        tables["hostnames"].columns["name"] : new_name,
+        tables["hostnames"].columns["domainId"] : domain_id,
+        tables["hostnames"].columns["lastUpdatedBy"] : user_name
+    })
+
+    try:
+        session.execute(update_stmt)
+        session.commit()
+        logger.info("Host updated")
+    except:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def update_ip(ip, new_ip):
+    logger = logging.getLogger("magdb")
+
+    try:
+        old_host_address = session.query(tables["hostAddresses"]).filter(tables["hostAddresses"].columns["ipAddress"] == ip).first()
+        if not old_host_address:
+            logger.error('Specified IP does not exist')
+            sys.exit(3)
+    except:
+        printException()
+        sys.exit(3)
+
+    try:
+        update_stmt = update(tables["hostAddresses"],tables["hostAddresses"].columns["id"]==old_host_address.id, values={
+            tables["hostAddresses"].columns["ipAddress"] : new_ip,
+            tables["hostAddresses"].columns["lastUpdatedBy"] : user_name
+        })
+        session.execute(update_stmt)
+        session.commit()
+        logger.info("IP updated")
+    except:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def update_interface(mac, name_new):
+    logger = logging.getLogger("magdb")
+
+    interface = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['macAddress'] == mac).first()
+
+    if interface:
+        logger.info('Found interface with name %s' % interface.name)
+        interface = dict(zip(tables["networkInterfaces"].columns, interface))
+        interface['name'] = name_new
+        update_stmt = update(tables["networkInterfaces"],tables["networkInterfaces"].columns["macAddress"]==mac, values=interface)
+        session.execute(update_stmt)
+        session.commit()
+        logger.info('Interface updated')
+    else:
+        logger.error('Specified interface does not exist')
+        sys.exit(3)
+
+
+def update_interface_mac(mac, mac_new):
+    logger = logging.getLogger("magdb")
+
+    interface = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['macAddress'] == mac).first()
+
+    if interface:
+        logger.info('Found interface with MAC %s, named %s' % (interface.macAddress, interface.name))
+        interface = dict(zip(tables["networkInterfaces"].columns, interface))
+        interface['macAddress'] = mac_new
+        update_stmt = update(tables["networkInterfaces"],tables["networkInterfaces"].columns["macAddress"]==mac, values=interface)
+        session.execute(update_stmt)
+        session.commit()
+        logger.info('Interface updated')
+    else:
+        logger.error('Specified interface does not exist')
+        sys.exit(3)
+
+
+def add_ip(ip, mac):
+    logger = logging.getLogger("magdb")
+
+    try:
+        network_inter = session.query(tables["networkInterfaces"]).filter(tables["networkInterfaces"].columns["macAddress"] == mac.lower()).first()
+        if not network_inter:
+            logger.error('Specified mac address does not exist')
+            sys.exit(3)
+    except:
+        printException()
+        sys.exit(3)
+
+    try:
+        insert_stmt = insert(tables["hostAddresses"],values={
+            tables["hostAddresses"].columns["ipAddress"] : ip,
+            tables["hostAddresses"].columns["networkInterfaceId"] : network_inter.id,
+            tables["hostAddresses"].columns["lastUpdatedBy"] : user_name
+        })
+        session.execute(insert_stmt)
+        session.commit()
+        logger.info("IP Added")
+    except:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def add_host(host, ip, record = 'A'):
+    logger = logging.getLogger("magdb")
+
+    try:
+        host_address = session.query(tables["hostAddresses"]).filter(tables["hostAddresses"].columns["ipAddress"] == ip).first()
+        if not host_address:
+            logger.error('Specified ip address does not exist')
+            sys.exit(3)
+    except:
+        printException()
+        sys.exit(3)
+
+    h_list = host.split('.',1)
+    if len(h_list) == 1:
+        logger.error('Wrong hostname name.domain')
+        sys.exit(3)
+
+    d = session.query(tables["domains"]).filter(tables["domains"].columns["domainName"] == h_list[1]).first()
+    if not d:
+        logger.error("Domain %s does not exist" % h_list[1])
+        sys.exit(3)
+
+    try:
+        insert_stmt = insert(tables["hostnames"],values={
+            tables["hostnames"].columns["name"] : h_list[0],
+            tables["hostnames"].columns["hostAddressId"] : host_address.id,
+            tables["hostnames"].columns["domainId"] : d.id,
+            tables["hostnames"].columns["lastUpdatedBy"] : user_name,
+            tables["hostnames"].columns["recordType"] : record
+        })
+        session.execute(insert_stmt)
+        session.commit()
+        logger.info("Host added")
+    except:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def add_stub(ip, host):
+    logger = logging.getLogger("magdb")
+
+    logger.warning("You are about to add a stub record and intentionally violate the referential integrity of MagDB, you should know why you are doing this, if not hit Ctrl+C now.")
+    sleep(5)
+
+    h_list = host.split('.',1)
+    try:
+        insert_stmt = insert(tables["hostAddresses"],values={
+            tables["hostAddresses"].columns["ipAddress"] : ip,
+            tables["hostAddresses"].columns["lastUpdatedBy"] : user_name
+        })
+        ip_id = session.execute(insert_stmt).inserted_primary_key[0]
+
+        if ip_id:
+            d = session.query(tables["domains"]).filter(tables["domains"].columns["domainName"] == h_list[1]).first()
+            if d:
+                insert_stmt = insert(tables["hostnames"],values={
+                    tables["hostnames"].columns["name"] : h_list[0],
+                    tables["hostnames"].columns["hostAddressId"] : ip_id,
+                    tables["hostnames"].columns["domainId"] : d.id,
+                    tables["hostnames"].columns["lastUpdatedBy"] : user_name
+                })
+                session.execute(insert_stmt)
+                session.commit()
+                logger.info("Stub record added")
+            else:
+                logger.error("Domain %s does not exist" % h_list[1])
+                session.rollback()
+        else:
+            logger.error("Failed to add IP")
+            session.rollback()
+    except:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def add_alias(alias, host):
+    logger = logging.getLogger("magdb")
+    user_name = getpass.getuser()
+    if user_name.lower() == "root":
+        logger.error("This script may not be run as the root user")
+        sys.exit(3)
+
+
+    h_list = host.split('.',1)
+    if len(h_list) == 1:
+        h_list.append("gridpp.rl.ac.uk")
+
+    hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+    if not hostname:
+        logger.error('Specified hostname does not exist')
+        sys.exit(3)
+
+    a_list = alias.split('.',1)
+    if len(a_list) == 1:
+        logger.error('Wrong alias name name.domain')
+        sys.exit(3)
+
+    d = session.query(tables["domains"]).filter(tables["domains"].columns["domainName"] == a_list[1]).first()
+    if not d:
+        logger.error("Domain %s does not exist" % h_list[1])
+        sys.exit(3)
+
+    try:
+        insert_stmt = insert(tables["aliases"],values={
+            tables["aliases"].columns["name"] : a_list[0],
+            tables["aliases"].columns["domainId"] : d.id,
+            tables["hostnames"].columns["lastUpdatedBy"] : user_name
+        })
+        session.execute(insert_stmt)
+        session.commit()
+
+        new_alias = session.query(tables['aliases']).filter(tables['aliases'].columns['domainId'] == d.id).filter(tables['aliases'].columns['name'] == a_list[0] ).first()
+
+        insert_stmt = insert(tables["hostnamesAliases"],values={
+            tables["hostnamesAliases"].columns["hostnameId"] : hostname.id,
+            tables["hostnamesAliases"].columns["aliasId"] : new_alias.id,
+            tables["hostnames"].columns["lastUpdatedBy"] : user_name
+        })
+        session.execute(insert_stmt)
+        session.commit()
+        logger.info("Alias added")
+    except:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def add_interface(mac, name, system):
+    logger = logging.getLogger("magdb")
+
+    try:
+        t = tables["networkInterfaces"]
+        v = {
+            t.columns["lastUpdatedBy"] : user_name,
+            t.columns["macAddress"] : mac,
+            t.columns["name"] : name,
+            t.columns["systemId"] : system,
+        }
+        insert_stmt = insert(t, values=v)
+        session.execute(insert_stmt)
+        session.commit()
+        logger.info("Interface added")
+    except IntegrityError:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def remove_host(target, cascade):
+    logger = logging.getLogger("magdb")
+
+    if target:
+        h_list = target.split('.',1)
+        if len(h_list) == 1:
+            h_list.append("gridpp.rl.ac.uk")
+
+        old_hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+
+        if old_hostname:
+            aliases = session.query(view_aliases).filter(view_aliases.columns["hostnameId"] == old_hostname.id).all()
+            logger.info("Removing hostname %d" % old_hostname.id)
+            if aliases:
+                logger.info("Hostname has aliases %s" % aliases)
+            if not aliases or (aliases and cascade):
+                try:
+                    delete_stmt = delete(tables["hostnames"],tables["hostnames"].columns["id"]==old_hostname.id)
+                    rowcount = session.execute(delete_stmt).rowcount
+                    session.commit()
+                    logger.info('Hostname removed, %d row(s) affected' % rowcount)
+                except:
+                    printException()
+                    sys.exit(3)
+            else:
+                logger.error('Will not delete hostames which have aliases, unless the --cascade flag is set')
+                sys.exit(3)
+        else:
+            logger.error("No such hostname")
+            sys.exit(3)
+
+
+def remove_system(system_id):
+    logger = logging.getLogger("magdb")
+
+    #magdb.engine.echo = True
+
+    print TEXT_DANGER
+    print 'Think carefully before you go any further, you are about to purge all details of this system from MagDB.'
+    print 'Once you do this, there is no going back!'
+    print
+
+    if system_id:
+        system_query = session.query(magdb.systems).filter(tables['systems'].columns['id'] == system_id)
+        system = system_query.first()
+
+        if system:
+            (id_interfaces, id_addresses, id_hostnames) = info_all(system_id)
+    
+            overwatch_record = session.query(magdb.storageSystems).filter(tables['storageSystems'].columns['systemId'] == system.id).first()
+            if overwatch_record:
+                print
+                print 'Overwatch Record'
+                for key, val in zip(tables['storageSystems'].columns, overwatch_record):
+                    if key.name != 'miscComments':
+                        print '%24s %s' % (key.name, val)
+
+            # The scary bit...
+            for id in id_hostnames:
+                session.execute(magdb.hostnames.delete(magdb.hostnames.c.id == id))
+
+            for id in id_addresses:
+                session.execute(magdb.hostAddresses.delete(magdb.hostAddresses.c.id == id))
+
+            for id in id_interfaces:
+                session.execute(magdb.networkInterfaces.delete(magdb.networkInterfaces.c.id == id))
+
+            session.execute(magdb.storageSystems.delete(magdb.storageSystems.c.systemId == system.id)) # Remove Overwatch record
+            session.execute(magdb.systems.delete(magdb.systems.c.id == system.id))
+
+            print
+            print 'Do you wish to continue and delete the above information? (yes/NO)'
+            s = raw_input('> ')
+            if s == 'yes':
+                logger.info('Committing changes...')
+                session.commit()
+                logger.info('DONE')
+            else:
+                logger.info('Cancelling and rolling back transaction...')
+                session.rollback()
+                logger.info('CANCELLED')
+        else:
+            logger.error("System %s not found" % system_id)
+
+
+def remove_alias(target):
+    logger = logging.getLogger("magdb")
+
+    if target:
+        h_list = target.split('.',1)
+        if len(h_list) == 1:
+            h_list.append("gridpp.rl.ac.uk")
+
+        old_alias = session.query(tables["aliases"]).filter(tables["domains"].columns["id"] == tables["aliases"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["aliases"].columns["name"] == h_list[0]).first()
+
+        if old_alias:
+            try:
+                delete_stmt = delete(tables["aliases"],tables["aliases"].columns["id"]==old_alias.id)
+                session.execute(delete_stmt)
+                session.commit()
+                logger.info("Alias removed")
+            except:
+                printException()
+                sys.exit(3)
+
+        else:
+            logger.error("No such alias")
+            sys.exit(3)
+
+
+def remove_ip(target, cascade):
+    logger = logging.getLogger("magdb")
+
+    try:
+        old_host_address = session.query(tables["hostAddresses"]).filter(tables["hostAddresses"].columns["ipAddress"] == target).first()
+    except:
+        printException()
+        sys.exit(3)
+
+    if old_host_address:
+        vn = session.query(view).filter(view.columns["ipAddress"] == target).all()
+        logger.info("Removing %s" % vn)
+        has_hostnames = False
+        for v in vn:
+            if v.fqdn:
+                has_hostnames = True
+        if not has_hostnames or (has_hostnames and cascade):
+            try:
+                delete_stmt = delete(tables["hostAddresses"],tables["hostAddresses"].columns["id"]==old_host_address.id)
+                session.execute(delete_stmt)
+                session.commit()
+                logger.info('IPs removed')
+            except:
+                printException()
+                sys.exit(3)
+        else:
+            logger.error('Will not delete IP addresses which have hostnames unless the --cascade flag is set')
+            sys.exit(3)
+    else:
+        logger.error("No such IP address")
+        sys.exit(3)
+
+
+def info_network(network_address):
+    logger = logging.getLogger("magdb")
+
+    try:
+        network = IPNetwork(network_address)
+    except AddrFormatError as e:
+        logger.error(e)
+        sys.exit(3)
+
+    subnet = session.query(tables["networkSubnets"]).filter(tables["networkSubnets"].columns["ipAddress"] == network_address).first()
+
+    if subnet:
+        addresses = session.query(tables["hostAddresses"]).filter('"hostAddresses"."ipAddress" << \'%s\'' % network_address).count()
+
+        privacy = 'public'
+        if network.is_private():
+            privacy = 'private'
+
+        logger.info(
+            '%s is a %s IPV%d network called "%s", it contains %d of a potential %d addresses.',
+            subnet.ipAddress,
+            privacy,
+            network.version,
+            subnet.name,
+            addresses,
+            network.size
+        )
+
+        return subnet
+
+    logger.error('No network found matching "%s"', network_address)
+    return None
+
+
+def add_network(network_address, name, gateway):
+    logger = logging.getLogger("magdb")
+
+    try:
+        t = tables["networkSubnets"]
+        v = {
+            t.columns["lastUpdatedBy"] : user_name,
+            t.columns["ipAddress"] : network_address,
+            t.columns["gateway"] : gateway,
+            t.columns["name"] : name,
+        }
+        insert_stmt = insert(t, values=v)
+        session.execute(insert_stmt)
+        session.commit()
+        logger.info("Added subnet %s" % network_address)
+    except IntegrityError:
+        session.rollback()
+        printException()
+        sys.exit(3)
+
+
+def remove_network(network_address):
+    logger = logging.getLogger("magdb")
+    network = info_network(network_address)
+    if network:
+        try:
+            session.execute(magdb.networkSubnets.delete(magdb.networkSubnets.c.id == network.id))
+        except IntegrityError:
+            logger.error('Cannot remove network while it is still in use')
+            sys.exit(3)
+
+        session.commit()
+        logger.info('Network removed')
+
+
+def split_network(network_address):
+    logger = logging.getLogger("magdb")
+
+    network = info_network(network_address)
+
+    if network:
+        logger.debug('Will split network "%s" with address "%s"', network.name, network.ipAddress)
+        network = IPNetwork(network.ipAddress)
+
+        if network.version == 4 and network.prefixlen < 32 or network.version == 6 and network.prefixlen < 128:
+            logger.info('Subnet with prefix length /%d will be split into two new subnets of /%d', network.prefixlen, network.prefixlen+1)
+
+            if network.version == 6 and network.prefixlen >= 64:
+                logger.info('Warning, creating IPv6 subnets smaller than /64 is STRONGLY DISCOURAGED. Please read https://tools.ietf.org/html/rfc7421 to understand why.')
+
+            subnets = network.subnet(network.prefixlen+1)
+
+            for subnet in subnets:
+                new_network = info_network(str(subnet))
+                if new_network:
+                    addresses = session.query(tables["hostAddresses"]).filter('"hostAddresses"."ipAddress" << \'%s\'' % subnet).count()
+                    logger.info('Will move %d addresses to a new subnet with address %s', addresses, subnet)
+
+                    update_stmt = update(tables["hostAddresses"], '"hostAddresses"."ipAddress" << \'%s\'' % subnet, values={
+                        tables["hostAddresses"].columns["networkSubnetId"] : new_network.id,
+                    })
+                    session.execute(update_stmt)
+
+            session.commit()
+
+        else:
+            logger.error('Subnet "%s" cannot be subdivided any further!', network_address)
+            sys.exit(3)
+
+    else:
+        logger.error('No network found matching "%s"', network_address)
+        sys.exit(3)
+
+
+if __name__ == "__main__":
+
+    global session
+    global metadata
+    global view
+    global tables
+    global hostnames
+
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', name="magdb")
+    logger = logging.getLogger("magdb")
+
+    user_name = getpass.getuser()
+    if user_name.lower() == 'root':
+        logger.error("This script may not be run as the root user")
+        sys.exit(3)
+
+    parser = argparse.ArgumentParser()
+    parser.usage = """
+    info    ip          <ip>
+    info    host        <fqdn>
+    info    network     <network address>
+    add     ip          <ip> <mac>
+    add     host        <fqdn> <ip>
+    add     host6       <fqdn> <ip>
+    add     network     <network address> <network name> <gateway address>
+    remove  ip          <ip> [--cascade]
+    remove  host        <fqdn>
+    remove  network     <network address>
+    update  interface   <mac> <new name>
+    update  ip          <current ip> <new ip>
+    update  host        <current fqdn> <new fqdn>
+    add     interface   <mac> <name> <system>
+    split   network     <network address>
+"""
+    parser.description = """
+    MagDB stores network information as a set of related objects:
+        system -> network interfaces -> ip addresses -> hostnames -> aliases
+
+    This tool allows you to administer the mapping between:
+        interface (mac) and ip;
+        ip and hostname;
+        hostname and alias.
+    """
+
+    """
+    info
+        host <hostname>
+        ip <ip address>
+
+    remove
+        host <hostname>
+        alias <alias>
+        ip <ip address>
+        ip <ip address>
+            Add --cascade to automatically delete dependent objects
+
+    update
+        ip <old ip> <new ip>
+
+    add
+        host <hostname> <ip address> - add new <hostname> to an existing <ip address>
+        alias <alias> <hostname> - add new <alias> to an existing <hostname>
+        ip <ip address> <mac address> - add new <ip address> to an existing <mac address>
+        interface <mac> <name> <system> - add new interface <mac address> to a system
+"""
+
+    parser.add_argument('mode', choices=['info', 'add', 'remove', 'update', 'split'])
+    parser.add_argument('context', choices=['host', 'host6', 'ip', 'alias', 'interface', 'stub', 'system', 'network'])
+    parser.add_argument("--cascade",action="store_true", dest="cascade", default=False ,help="Casacade deletion of attached objects (hostnames and/or aliases)")
+    args = parser.parse_known_args()
+
+    mode = args[0].mode
+    context = args[0].context
+    cascade = args[0].cascade
+    params = args[1]
+
+    (magdb, metadata, view, view_aliases) = setup()
+    session = magdb.session
+    tables  = metadata.tables
+    hostnames = Table('hostnames', metadata, autoload=True)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('target')
+
+    if mode == "info":
+        params = parser.parse_args(params)
+
+        f = globals()['%s_%s' % (mode, context)]
+        if f:
+            f(params.target)
+        else:
+            logger.error('The "%s" operation cannot be performed on "%s"', mode, context)
+
+    elif mode == "add":
+        if context == 'interface':
+            parser.add_argument('name')
+            parser.add_argument('system')
+            params = parser.parse_args(params)
+            add_interface(params.target, params.name, params.system)
+
+        else:
+            parser.add_argument('connector')
+
+            if context == "host":
+                params = parser.parse_args(params)
+                add_host(params.target, params.connector, 'A')
+            elif context == "host6":
+                params = parser.parse_args(params)
+                add_host(params.target, params.connector, 'AAAA')
+            elif context == 'network':
+                parser.add_argument('gateway')
+                params = parser.parse_args(params)
+                add_network(params.target, params.connector, params.gateway)
+            else:
+                f = globals()['%s_%s' % (mode, context)]
+                if f:
+                    params = parser.parse_args(params)
+                    f(params.connector)
+                else:
+                    logger.error('The "%s" operation cannot be performed on "%s"', mode, context)
+
+    elif mode == "remove":
+        params = parser.parse_args(params)
+        if context == "host":
+            remove_host(params.target, cascade)
+        elif context == "ip":
+            remove_ip(params.target, cascade)
+        else:
+            f = globals()['%s_%s' % (mode, context)]
+            if f:
+                f(params.target)
+            else:
+                logger.error('The "%s" operation cannot be performed on "%s"', mode, context)
+
+
+    elif mode == "update":
+        parser.add_argument('new')
+        params = parser.parse_args(params)
+        if context == "host":
+            update_host(params.target, params.new)
+        elif context == "ip":
+            update_ip(params.target, params.new)
+        elif context == 'alias':
+            logger.error('Update aliases is not possible, remove the old one and add a new one')
+        elif context == "interface":
+            update_interface(params.target, params.new)
+        else:
+            logger.error('The "%s" operation cannot be performed on "%s"', mode, context)
+
+    elif mode == "split":
+        params = parser.parse_args(params)
+        if context == 'network':
+            split_network(params.target)
+        else:
+            logger.error('The "%s" operation cannot be performed on "%s"', mode, context)

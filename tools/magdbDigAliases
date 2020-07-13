@@ -1,0 +1,31 @@
+#!/usr/bin/env python2
+
+from subprocess import Popen, PIPE
+from magdb import Magdb
+from json import dump
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+m = Magdb(CS)
+hosts = m.session.query(m.view).all()
+hosts = [r.fqdn for r in hosts]
+
+records = Popen(["dig", "@ns3.rl.ac.uk", "rl.ac.uk", "axfr"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+
+dns_records = {}
+
+for r in records:
+  if r and r[0] <> "#":
+    if "CNAME" in r:
+      rr_name, rr_ttl, rr_type, rr_class, rr_rdata = r.split()
+      rr_name = rr_name.strip(".")
+      rr_rdata = rr_rdata.strip(".")
+      if rr_name in hosts or rr_rdata in hosts:
+        if rr_rdata not in dns_records:
+          dns_records[rr_rdata] = []
+        dns_records[rr_rdata].append((rr_ttl, rr_type, rr_class, rr_name))
+
+dump_path = "/tmp/woopoo"
+f = open(dump_path, "w")
+dump(dns_records, f)
+f.close()

@@ -1,0 +1,25 @@
+#!/bin/env python2
+
+import psycopg2
+import psycopg2.extras
+import sys
+
+template = """
+  host %(fqdn)s {
+    option host-name "%(fqdn)s";
+    hardware ethernet %(macAddress)s;
+    fixed-address %(ipAddress)s;
+  }"""
+
+try:
+    conn=psycopg2.connect("host=magdb.gridpp.rl.ac.uk dbname=magDB4 user=overwatch password=q1w2e3r4")
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+except:
+    print 'Error: Unable to connect to magDB database!'
+    print sys.exc_info()[1]
+    sys.exit(1)
+
+cur.execute('SELECT * FROM "vNetwork2" WHERE "fqdn" LIKE \'dev-vm%.nubes.stfc.ac.uk\'')
+
+for record in cur:
+    print template % record

@@ -1,0 +1,43 @@
+#!/usr/bin/python2
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+import magdb
+import sqlalchemy
+
+from netaddr.strategy import eui48
+
+def main():
+  print("""
+                       ____  ____    _   _                         __     __
+ _ __ ___   __ _  __ _|  _ \| __ )  | | | |_   _ _ __   ___ _ __   \ \   / /
+| '_ ` _ \ / _` |/ _` | | | |  _ \  | |_| | | | | '_ \ / _ \ '__|___\ \ / / 
+| | | | | | (_| | (_| | |_| | |_) | |  _  | |_| | |_) |  __/ | |_____\ V /  
+|_| |_| |_|\__,_|\__, |____/|____/  |_| |_|\__, | .__/ \___|_|        \_/   
+                 |___/                     |___/|_|
+""")
+  print("MagDB Hyper-V MAC calculator")
+  print("This tool prints the next free MAC for use by Hyper-V VMs")
+  print("")
+
+  # Connect to magdb
+  m = magdb.Magdb(CS)
+  
+  # Use this ugly bit of code to try and automatically allocate a new unique MAC address
+  mac = eui48.str_to_int(m.session.query(m.networkInterfaces.columns["macAddress"]).filter('trunc("macAddress") = \'00:1D:D8:00:00:00\'').order_by('"macAddress" desc').first()[0])
+  mac += 1
+  mac = eui48.int_to_str(mac)
+  if m.session.query(m.networkInterfaces.columns["macAddress"]).filter('"macAddress" = \'%s\'' % mac).count():
+    print("Failed to auto-allocate unique MAC Address")
+    return(Null)
+
+  print '  +-%s-+' % ('-' * len(mac))
+  print '  | %s |' % mac.lower()
+  print '  +-%s-+' % ('-' * len(mac))
+  print
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nINFO: User Aborted")

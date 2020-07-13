@@ -1,0 +1,69 @@
+#!/usr/bin/python2
+
+import magdb
+import re
+import readline
+import socket
+import prettytable
+import argparse
+
+from subprocess import Popen, PIPE
+
+
+def main():
+  parser = argparse.ArgumentParser() #"""[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
+
+  parser.add_argument("--vendor", dest="vendor", help="Name of system vendor")
+  parser.add_argument("--rack", dest="rack", help="ID of rack system is in")
+  parser.add_argument("--position", dest="pos", help="Lowest unit in rack occupied by system", type=int)
+  parser.add_argument("--units", dest="units", help="Height of system in units", type=int)
+  parser.add_argument("--category", dest="category", help="Category/machine-type of system")
+  parser.add_argument("--manufacturer", dest="manufacturer", help="Manufacturer")
+  parser.add_argument("--mac", dest="mac", help="MAC address of eth0 on system")
+  parser.add_argument("--ip", dest="ip", help="Desired IP address of system")
+  parser.add_argument("--fqdn", dest="fqdn", help="Desired FQDN of system")
+
+  opts, args = parser.parse_known_args()
+
+  print("""
+                       ____  ____
+ _ __ ___   __ _  __ _|  _ \| __ )
+| '_ ` _ \ / _` |/ _` | | | |  _ \
+| | | | | | (_| | (_| | |_| | |_) |
+|_| |_| |_|\__,_|\__, |____/|____/
+                 |___/
+ ___       _ _   ____        ___ ____  __  __ ___
+|_ _|_ __ (_) |_| __ ) _   _|_ _|  _ \|  \/  |_ _|
+ | || '_ \| | __|  _ \| | | || || |_) | |\/| || |
+ | || | | | | |_| |_) | |_| || ||  __/| |  | || |
+|___|_| |_|_|\__|____/ \__, |___|_|   |_|  |_|___|
+                       |___/
+""")
+  print("MagDB System Initiation by IPMI")
+  print("This tool allocates a system ID and creates entries for a NEW server")
+  print("Enter ? at any time for possible values, press Ctrl+C at any time to abort")
+  print("")
+
+  print(args)
+
+  if args[0]:
+    ipmihost = args[0]
+
+    records = Popen(["ipmitool", "-H", ipmi_host, "delloem", "lom"], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+    print(records)
+#  t = prettytable.PrettyTable(["Property", "Value"])
+#  t.add_row(["Vendor", vendor.id])
+
+
+if __name__ == "__main__":
+  import getpass
+
+  user = getpass.getuser()
+
+  if user.lower() <> 'root':
+    try:
+      main()
+    except KeyboardInterrupt:
+      print("\nINFO: User Aborted")
+  else:
+    print 'ERROR: This command should not be run as root, please login as yourself and retry'

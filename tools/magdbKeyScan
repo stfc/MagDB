@@ -1,0 +1,21 @@
+#!/usr/bin/env python2
+
+import argparse
+from magdb import Magdb
+from subprocess import Popen, PIPE
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+
+def main(subnet=None):
+    m = Magdb(CS)
+    hosts = m.session.query(m.view.columns.fqdn).order_by(m.view.columns.fqdn).all()
+    hosts = [ h[0] for h in hosts ] # Untuple
+
+    for h in hosts:
+        if h and "pscs.internal" not in h:
+            print(h)
+
+
+if __name__ == "__main__":
+    main()

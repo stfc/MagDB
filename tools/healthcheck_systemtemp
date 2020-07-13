@@ -1,0 +1,141 @@
+#!/bin/bash
+
+# Defaults
+THRESHOLD=60
+SANITY_LIMIT=200
+NSCA_SERVER="130.246.180.225"    # Defaults to nagger
+
+# Config
+if [[ -e "/etc/sysconfig/healthcheck" ]]; then
+    . /etc/sysconfig/healthcheck
+fi
+if [[ -e "/etc/nagios/default_nsca_server" ]]; then
+    . /etc/nagios/default_nsca_server
+fi
+
+
+# Helper for nagios communication
+function tell_nagios {
+    state=$1
+    message=$2
+    /usr/bin/printf "%s\t%s\t%s\t%s\n" "$(/bin/hostname -s)" "healthcheck" "$state" "$message"  | /usr/sbin/send_nsca ${NSCA_SERVER} -c /etc/nagios/send_nsca.cfg
+}
+
+
+# Sanity Checks
+runningProcs=`ps auxww|grep -v grep|grep -c "ipmitool\|ipmi-sensors"`
+if [ $runningProcs -gt 1 ]; then
+    echo "UKNOWN: Aborted - $runningProcs ipmi processes already running"
+    tell_nagios "3" "Aborted - $runningProcs ipmi processes already running"
+    exit 3
+fi
+
+
+# Have checks been disabled?
+if [ -e "/etc/nohealthcheck" ]; then
+    echo "UKNOWN: Aborted - /etc/nohealthcheck present"
+    tell_nagios "3" "Aborted - /etc/nohealthcheck present"
+    exit 3
+fi
+
+
+# Not on all machines, but fastest due to caching
+function freeipmi {
+    if [[ -x /usr/sbin/ipmi-sensors ]]; then
+        t=$(/usr/sbin/ipmi-sensors -g Temperature | grep '\(PCIE\)\|\(MLB\)\|\(Sys\)' | grep ' C ' | cut -d : -f 3 | awk '{ print $1 }' | sort -n | tail -n 1)
+        s="freeipmi"
+    else
+        t=""
+    fi
+}
+
+
+# More commonly installed, but no caching
+function openipmi {
+    if [[ -x /usr/bin/ipmitool ]]; then
+        t=$(/usr/bin/ipmitool sdr type Temperature | grep '\(PCIE\)\|\(MLB\)\|\(Sys\)\|\(Planar\)' | cut -d \| -f 5 | grep -o "\-\?[0-9\.]\+" | sort -rn | head -n 1)
+        s="openipmi"
+    else
+        t=""
+    fi
+}
+
+
+# We can always fall back to lm_sensors
+function lm_sensors {
+    if [[ -x /usr/bin/sensors ]]; then
+        t=$(/usr/bin/sensors | grep temp | awk '{ print $2 }' | grep -o "\-\?[0-9\.]\+" | sort -rn | head -n 1)
+        s="lm_sensors"
+    else
+        t=""
+    fi
+}
+
+# Is this system a VM?
+function virtual_machine {
+    t=""
+    if [[ -x /usr/sbin/dmidecode ]]; then
+        if [[ "$(/usr/sbin/dmidecode -s system-product-name)" == "Virtual Machine" ]]; then
+            t="Virtual Machine"
+        fi
+    fi
+}
+
+
+# Try each method until a sensible looking value is found
+t=""
+s="unknown"
+if [[ -c /dev/ipmi0 || -c /dev/ipmi/0 || -c /dev/ipmidev/0 ]]; then
+    freeipmi 2> /dev/null
+
+    if [[ ! $t = *[[:digit:]]* ]]; then
+        openipmi 2> /dev/null
+    fi
+fi
+
+if [[ ! $t = *[[:digit:]]* ]]; then
+    lm_sensors 2> /dev/null
+fi
+
+if [[ ! $t = *[[:digit:]]* ]]; then
+    virtual_machine 2> /dev/null
+fi
+
+
+# Process and make a decision
+if [[ $t = *[[:digit:]]* ]]; then
+    t=$(printf %0.0f $t) # Round to the nearest integer
+
+    if [[ $t -lt $SANITY_LIMIT ]]; then
+        if [[ $t -gt $THRESHOLD ]]; then
+            tell_nagios "2" "Temperature ($t) above threshold ($THRESHOLD) (source: $s) | temperature=$t;$(( $THRESHOLD - 5 ));$THRESHOLD;0;$THRESHOLD,source=$s"
+            /sbin/shutdown -h now "Healthcheck detected overheating, Temperature ($t) above threshold ($THRESHOLD)"
+    
+        elif [[ $t -gt $(( $THRESHOLD - 5 )) ]]; then
+            /usr/bin/gmetric -n healthcheck_systemp -u C -x 60 -d 600 -t uint16 -v $t
+            tell_nagios "1" "Temperature ($t) near threshold ($THRESHOLD) (source: $s) | temperature=$t;$(( $THRESHOLD - 5 ));$THRESHOLD;0;$THRESHOLD,source=$s"
+            echo "WARNING: $t near threshold $THRESHOLD"
+    
+        else
+            /usr/bin/gmetric -n healthcheck_systemp -u C -x 60 -d 600 -t uint16 -v $t
+            tell_nagios "0" "Temperature ($t) below threshold ($THRESHOLD) (source: $s) | temperature=$t;$(( $THRESHOLD - 5 ));$THRESHOLD;0;$THRESHOLD,source=$s"
+            echo "OK: $t below threshold $THRESHOLD"
+    
+        fi
+    else
+        /usr/bin/gmetric -n healthcheck_systemp -u C -x 60 -d 600 -t uint16 -v $t
+        tell_nagios "1" "Temperature ($t) above sanity limit ($SANITY_LIMIT) (source: $s) | temperature=$t;$(( $THRESHOLD - 5 ));$THRESHOLD;0;$THRESHOLD,source=$s"
+        echo "WARNING: $t above sanity limit $SANITY_LIMIT"
+    fi
+
+elif [[ "$t" == "Virtual Machine" ]]; then
+    echo "OK: System is a virtual machine"
+    tell_nagios "0" "System is a virtual machine"
+
+else
+    echo "UNKNOWN: Could not find a usable temperature sensor"
+    tell_nagios "3" "Could not find a usable temperature sensor"
+    exit 3
+
+fi
+

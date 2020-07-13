@@ -1,0 +1,13 @@
+#!/usr/bin/env python2
+
+from subprocess import Popen, PIPE
+from magdb import Magdb
+from json import dump
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+m = Magdb(CS)
+
+# Delete stale LLDP connection data after a fortnight
+m.session.execute(''' delete from "networkLinks" where "lastUpdateDate" < CURRENT_DATE - INTERVAL '14 days' ''')
+m.session.commit()

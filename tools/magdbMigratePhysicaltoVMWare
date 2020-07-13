@@ -1,0 +1,100 @@
+#!/usr/bin/python2
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+import logging
+import argparse
+import getpass
+import sys
+import sqlalchemy
+import network_updater
+import magdb
+from magdb_cli_tools import confirm
+
+QUESTIONS = [
+    'Does the information above correctly describe your system?',
+    'Has the existing physical machine been completely powered off?',
+    #'This process will modify the MAC addresses of your system, is this acceptable?',
+]
+
+def main(system_id, user_name):
+    logger = logging.getLogger("magdb")
+
+    if user_name.lower() == 'root':
+        logger.error("This script may not be run as the root user")
+        sys.exit(3)
+
+    # Bootstrap magdb connection in network_updater
+    (network_updater.magdb, metadata, network_updater.view, network_updater.view_aliases) = network_updater.setup()
+    network_updater.session = network_updater.magdb.session
+    network_updater.tables = metadata.tables
+
+    # Tables to use
+    t_systems = network_updater.magdb.systems
+    t_interfaces = network_updater.magdb.networkInterfaces
+    t_view = network_updater.magdb.view_build_template
+
+    logger.warning('The following virtual machine will be converted in MagDB to an VMWare system, please check these details carefully')
+
+    view_query = network_updater.session.query(t_view).filter(t_view.c.systemId == system_id)
+    view = view_query.first()
+
+    print
+    for k in view.keys():
+        print '%16s : %s' % (k, getattr(view, k))
+    print
+    (interface_ids,_,_) = network_updater.info_all(system_id)
+    print
+
+    system_query = network_updater.session.query(t_systems).filter(t_systems.c.id == system_id)
+    system = system_query.first()
+
+    # Check that this thing actually seems to be a HyperV VM
+    # i.e is one of vm-hyperv, hyperv-2cpu-4-100, hyperv-2cpu-01, hyperv-2cpu-4-80, hyperv-2cpu-4-300, hyperv-1cpu-01, hyperv-2cpu-01, vm-hyperv-2disk, vm-hyperv-2disk-small
+    if system.categoryId in (25, 39, 40, 42, 43, 48, 49, 209, 212) or system.categoryId == 217:
+        logger.error('System is listed as a VM, aborting.')
+        sys.exit(2)
+
+    # Make sure the user is sure
+    for question in QUESTIONS:
+        if not confirm(question):
+            logger.error('Aborted - Negative response to question')
+            sys.exit(1)
+
+    network_updater.session.execute(t_systems.update().values({
+        'vendorId' : 29, # VMWare
+        'rackId' : 14, # Virtual rack for migrated HyperV VMs
+        'systemRackUnits' : 1,
+        'systemRackPos' : 1, 
+        'categoryId' : 217, # vm-vmware
+        'manufacturerId' : 19, # STFC
+        'lastUpdatedBy' : user_name,
+        'lifestageId' : 3, # Production
+    }).where(t_systems.c.id == system_id))
+
+    #for interface_id in interface_ids:
+    #    interface_query = network_updater.session.query(t_interfaces).filter(t_interfaces.c.id == interface_id)
+    #    interface = interface_query.first()
+
+        #if interface.macAddress.startswith('00:1d:d8:'):
+        #    network_updater.session.execute(t_interfaces.update().values({
+        #        'macAddress' : interface.macAddress.replace('00:1d:d8:', 'fa:1d:d8:')
+        #    }).where(t_interfaces.c.id == interface_id))
+        #else:
+        #    logger.warning('Interface "%s" has a MAC OUI outside of the normal HyperV range, it will not be modified.', interface.name)
+
+    logger.info('Pausing for five seconds before committing changes, this is your last chance to abort.')
+    network_updater.sleep(5)
+    logger.info('Committing changes...')
+    network_updater.session.commit()
+    logger.info('DONE')
+
+
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s', name="magdb")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('system_id', help='System ID of the virtual-machine to move from HyperV to SCD Nubes VMWare')
+    args = parser.parse_args()
+    user_name = getpass.getuser()
+    main(args.system_id, user_name)

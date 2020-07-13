@@ -1,0 +1,160 @@
+#!/usr/bin/python2
+
+CS = 'postgresql://root:8yLxeqT48PPd5gAJeDxk@magdb.gridpp.rl.ac.uk/magDB4'
+
+import magdb
+import re
+import readline
+import socket
+import sqlalchemy
+import prettytable
+import argparse
+
+from netaddr.strategy import eui48
+
+from magdb_cli_tools import *
+
+RE_MAC = re.compile("([a-fA-F0-9]{2}:?){6}")
+RE_FQDN = re.compile("^[a-zA-Z0-9\-.]{1,}$")
+
+
+def main():
+  parser = argparse.ArgumentParser() #"""[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
+
+  parser.add_argument("--ip", dest="ip", help="Desired IP address of system")
+  parser.add_argument("--fqdn", dest="fqdn", help="Desired FQDN of system")
+
+  args = parser.parse_known_args()
+
+  print('''
+ __  __             ____  ____    _   _       _               
+|  \/  | __ _  __ _|  _ \| __ )  | \ | |_   _| |__   ___  ___ 
+| |\/| |/ _` |/ _` | | | |  _ \  |  \| | | | | '_ \ / _ \/ __|
+| |  | | (_| | (_| | |_| | |_) | | |\  | |_| | |_) |  __/\__ \ 
+|_|  |_|\__,_|\__, |____/|____/  |_| \_|\__,_|_.__/ \___||___/
+              |___/
+''')
+  print("MagDB Nubes Cloud Virtual Machine Initiator")
+  print("This tool allocates a system ID and creates entries for a NEW VM")
+  print("Enter ? at any time for possible values, press Ctrl+C at any time to abort")
+  print("")
+
+  # Connect to magdb
+  m = magdb.Magdb(CS)
+  
+  # Vendor
+  vendor = 18
+
+  # Rack ID
+  rack = 12
+
+  # Position
+  pos = 1
+
+  # Rack Units
+  units = 1
+
+  # Category
+  category = 139
+
+  # Manufacturer
+  manufacturer = 19
+  
+  ip = unused(m, "IP address", m.hostAddresses, m.hostAddresses.columns["ipAddress"], args[0].ip)
+  fqdn = unused(m, "FQDN", m.view, m.view.columns["fqdn"], args[0].fqdn)
+
+  # Use this ugly bit of code to try and automatically allocate a new unique MAC address
+  mac = eui48.str_to_int(m.session.query(m.networkInterfaces.columns["macAddress"]).filter('trunc("macAddress") = \'fa:ca:de:00:00:00\'').order_by('"macAddress" desc').first()[0])
+  mac += 1
+  mac = eui48.int_to_str(mac)
+  if m.session.query(m.networkInterfaces.columns["macAddress"]).filter('"macAddress" = \'%s\'' % mac).count():
+    print("Failed to auto-allocate unique MAC Address")
+    return(Null)
+  
+  # IP address
+  if not ip:
+    print("IP Address?") 
+    t = prettytable.PrettyTable(m.networkSubnets.columns.keys())
+    for s in m.session.query(m.networkSubnets).all():
+      t.add_row(s)
+    t = "Must be in one of the following subnets:\n" + t.get_string()
+    ip = getIP(m, t)
+  
+  # FQDN
+  if not fqdn:
+    print("Fully Qualified Domain Name?")
+    t = prettytable.PrettyTable(m.domains.columns.keys())
+    for s in m.session.query(m.domains).all():
+      t.add_row(s)
+    t = "Must be unique and in one of the following domains:\n" + t.get_string()
+    fqdn = getFQDN(m, t)
+  
+  t = prettytable.PrettyTable(["Property", "Value"])
+  t.add_row(["MAC Address", mac.replace("-",":")])
+  t.add_row(["IP Address", ip])
+  t.add_row(["FQDN", fqdn])
+  print("INFO: Will commit the following to magDB:")
+  t.printt()
+  
+  # Make changes to DB (within transaction)
+  c = m.systems.columns
+  i = m.systems.insert(
+    values = {
+      c["vendorId"] : vendor,
+      c["rackId"] : rack,
+      c["systemRackUnits"] : units,
+      c["systemRackPos"] : pos,
+      c["categoryId"] : category,
+      c["lifestageId"] : 1,
+      c["manufacturerId"] : manufacturer,
+    }
+  )
+  
+  # Check primary key a.k.a. system ID
+  system_id = m.session.execute(i).inserted_primary_key
+  
+  if system_id is not None and len(system_id) == 1:
+    system_id = system_id[0]
+    print("INFO: Allocated System ID %i" % system_id)
+    
+    c = m.networkInterfaces.columns
+    i = m.networkInterfaces.insert(
+      values = {
+        c["macAddress"] : mac,
+        c["name"] : "eth0",
+        c["systemId"] : system_id,
+        c["networkInterfaceTypeId"] : 2,
+        c["isBootInterface"] : True,
+      }
+    )
+    
+    # Run through changes
+    if m.session.execute(i):
+      if m.add_ip(ip, mac):
+        if m.add_host(fqdn, ip, "init system"):
+          # All has worked, so commit changes to DB
+          m.session.commit()
+          print("INFO: Success. Transaction committed.")
+        else:
+          print("ERROR: Problem adding hostname")
+      else:
+        print("ERROR: Problem adding IP address")
+    else:
+      print("ERROR: Unable to create network interface")
+  else:
+    m.session.rollback()
+    print("ERROR: Did not allocated a system ID, transaction rolled back.")
+
+
+if __name__ == "__main__":
+  import getpass
+
+  user = getpass.getuser()
+
+  if user.lower() <> 'root':
+    try:
+      main()
+    except KeyboardInterrupt:
+      print("\nINFO: User Aborted")
+  else:
+    print 'ERROR: This command should not be run as root, please login as yourself and retry'
