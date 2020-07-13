@@ -6,33 +6,33 @@ from magdb import Magdb, CS
 from subprocess import Popen, PIPE
 
 def list():
-  m = Magdb(CS)
-  p = PrettyTable(m.networkSubnets.columns.keys())
-  subnets = m.session.query(m.networkSubnets)
-  for s in subnets.all():
-    p.add_row(s)
-  p.printt()
+    m = Magdb(CS)
+    p = PrettyTable(m.networkSubnets.columns.keys())
+    subnets = m.session.query(m.networkSubnets)
+    for s in subnets.all():
+        p.add_row(s)
+    p.printt()
 
 def main(subnet=None):
-  m = Magdb(CS)
-  subnets = m.session.query(m.networkSubnets)
+    m = Magdb(CS)
+    subnets = m.session.query(m.networkSubnets)
 
-  if subnet <> None:
-    subnets = subnets.filter(m.networkSubnets.columns["id"] == subnet)
+    if subnet <> None:
+        subnets = subnets.filter(m.networkSubnets.columns["id"] == subnet)
 
-  for s in subnets.all():
-    print("Sweeping subnet %s (%s)" % (s.ipAddress, s.name))
-    ips = Popen(["fping", "-a", "-g", s.ipAddress], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
-    for i in ips:
-      m.saw_ip(str(i))
-    m.session.commit()
+    for s in subnets.all():
+        print("Sweeping subnet %s (%s)" % (s.ipAddress, s.name))
+        ips = Popen(["fping", "-a", "-g", s.ipAddress], stdout=PIPE, stderr=PIPE).communicate()[0].splitlines()
+        for i in ips:
+            m.saw_ip(str(i))
+        m.session.commit()
 
 if __name__ == "__main__":
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--subnet", dest="subnet", default=None, help="ID of a specific subnet to sweep")
-  opts, args = parser.parse_known_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--subnet", dest="subnet", default=None, help="ID of a specific subnet to sweep")
+    opts, args = parser.parse_known_args()
 
-  if opts.subnet == "list":
-    list()
-  else:
-    main(opts.subnet)
+    if opts.subnet == "list":
+        list()
+    else:
+        main(opts.subnet)
