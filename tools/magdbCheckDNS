@@ -62,7 +62,7 @@ if __name__ == "__main__":
     table = prettytable.PrettyTable(["FQDN In MagDB", "IP in MagDB", "Reverse DNS", "Forward DNS", "Host Updated By", "IP Updated By", "Reasons for being flagged"])
 
     try:
-        conn=psycopg2.connect(CS)
+        conn = psycopg2.connect(CS)
     except:
         print 'Error: Unable to connect to database!'
 
@@ -84,14 +84,14 @@ if __name__ == "__main__":
     if args.format == "html":
         print('<!DOCTYPE HTML><html lang=en><head><title>MagDB DNS Check</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
         print('<div class="head"><h1>MagDB DNS Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
-        print (("<h2>"+INFO_TEXT+"</h2>") % (len(host_domain_ip_list)))
+        print(("<h2>" + INFO_TEXT + "</h2>") % (len(host_domain_ip_list)))
         table.print_html(sortby="FQDN In MagDB")
         print("</body></html>");
     elif args.format == "json":
-        print(json.dumps({"aoColumns" : table.fields, "aaData" : table.rows}))
+        print(json.dumps({"aoColumns": table.fields, "aaData": table.rows}))
     else:
         print("MagDB DNS Status as of %s" % datetime.datetime.now())
-        print (INFO_TEXT % (len(host_domain_ip_list)))
+        print(INFO_TEXT % (len(host_domain_ip_list)))
         table.printt(sortby="FQDN In MagDB")
 
 
