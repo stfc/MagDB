@@ -46,21 +46,21 @@ def setup():
     metadata = MetaData()
     metadata.reflect(bind=engine)
 
-    view = Table("vNetwork2", metadata, Column("systemId", Integer), Column("macAddress", Integer), Column("ipAddress", Integer, primary_key=True),Column("fqdn", Integer) , autoload_with=engine)
-    view_aliases = Table("vAliases", metadata, Column("hostnameId", Integer, primary_key=True), Column("aliasId", Integer, primary_key=True), Column("alias", String), Column("aliasDomian", String),Column("host", String),Column("hostDomain", String), autoload_with=engine)
+    view = Table("vNetwork2", metadata, Column("systemId", Integer), Column("macAddress", Integer), Column("ipAddress", Integer, primary_key=True), Column("fqdn", Integer), autoload_with=engine)
+    view_aliases = Table("vAliases", metadata, Column("hostnameId", Integer, primary_key=True), Column("aliasId", Integer, primary_key=True), Column("alias", String), Column("aliasDomian", String), Column("host", String), Column("hostDomain", String), autoload_with=engine)
 
     from sqlalchemy.orm import sessionmaker
     Session = sessionmaker(bind=engine)
 
     session = Session()
 
-    return (session, metadata,view, view_aliases)
+    return (session, metadata, view, view_aliases)
 
 
 def get_hostname(new_hostname):
     logger = logging.getLogger("magdb")
 
-    h_list = new_hostname.split('.',1)
+    h_list = new_hostname.split('.', 1)
     if len(h_list) == 1:
         logger.error('Please type full NEW hostname [name.domain]')
         sys.exit(3)
@@ -75,13 +75,13 @@ def get_hostname(new_hostname):
                 logger.error("Hostname: %s already exists" % new_hostname)
                 return sys.exit(3)
             else:
-                return(h_list[0],d.id)
+                return(h_list[0], d.id)
 
 
 def info_host(target):
     logger = logging.getLogger("magdb")
 
-    h_list = target.split('.',1)
+    h_list = target.split('.', 1)
     if len(h_list) == 1:
         h_list.append(DEFAULT_DOMAIN)
 
@@ -89,7 +89,7 @@ def info_host(target):
         vn = session.query(view).filter(view.columns["fqdn"] == h_list[0] + '.' + h_list[1]).first()
         if vn:
             logger.info("%10s%20s%20s%30s" % vn)
-            hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+            hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
             aliases = session.query(view_aliases).filter(view_aliases.columns["hostnameId"] == hostname.id).all()
             if aliases:
                 for a in aliases:
@@ -104,7 +104,7 @@ def info_host(target):
 def info_alias(target):
     logger = logging.getLogger("magdb")
 
-    h_list = target.split('.',1)
+    h_list = target.split('.', 1)
     if len(h_list) == 1:
         h_list.append()
     try:
@@ -133,11 +133,11 @@ def info_ip(target):
 def update_host(host, new_hostname):
     logger = logging.getLogger("magdb")
 
-    h_list = host.split('.',1)
+    h_list = host.split('.', 1)
     if len(h_list) == 1:
         h_list.append(DEFAULT_DOMAIN)
 
-    old_hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+    old_hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
     logger.info("Old hostname %s in domain %s" % (h_list[0], old_hostname.domainId))
 
     if not old_hostname:
@@ -148,10 +148,10 @@ def update_host(host, new_hostname):
 
     logger.info("New hostname %s in domain %s" % (new_name, domain_id))
 
-    update_stmt = update(tables["hostnames"],tables["hostnames"].columns["id"]==old_hostname.id, values={
-        tables["hostnames"].columns["name"] : new_name,
-        tables["hostnames"].columns["domainId"] : domain_id,
-        tables["hostnames"].columns["lastUpdatedBy"] : user_name
+    update_stmt = update(tables["hostnames"], tables["hostnames"].columns["id"] == old_hostname.id, values = {
+        tables["hostnames"].columns["name"]: new_name,
+        tables["hostnames"].columns["domainId"]: domain_id,
+        tables["hostnames"].columns["lastUpdatedBy"]: user_name
     })
 
     try:
@@ -177,9 +177,9 @@ def update_ip(ip, new_ip):
         sys.exit(3)
 
     try:
-        update_stmt = update(tables["hostAddresses"],tables["hostAddresses"].columns["id"]==old_host_address.id, values={
-            tables["hostAddresses"].columns["ipAddress"] : new_ip,
-            tables["hostAddresses"].columns["lastUpdatedBy"] : user_name
+        update_stmt = update(tables["hostAddresses"], tables["hostAddresses"].columns["id"] == old_host_address.id, values = {
+            tables["hostAddresses"].columns["ipAddress"]: new_ip,
+            tables["hostAddresses"].columns["lastUpdatedBy"]: user_name
         })
         session.execute(update_stmt)
         session.commit()
@@ -203,10 +203,10 @@ def add_ip(ip, mac):
         sys.exit(3)
 
     try:
-        insert_stmt = insert(tables["hostAddresses"],values={
-            tables["hostAddresses"].columns["ipAddress"] : ip,
-            tables["hostAddresses"].columns["networkInterfaceId"] : network_inter.id,
-            tables["hostAddresses"].columns["lastUpdatedBy"] : user_name
+        insert_stmt = insert(tables["hostAddresses"], values={
+            tables["hostAddresses"].columns["ipAddress"]: ip,
+            tables["hostAddresses"].columns["networkInterfaceId"]: network_inter.id,
+            tables["hostAddresses"].columns["lastUpdatedBy"]: user_name
         })
         session.execute(insert_stmt)
         session.commit()
@@ -229,7 +229,7 @@ def add_host(host, ip):
         printException()
         sys.exit(3)
 
-    h_list = host.split('.',1)
+    h_list = host.split('.', 1)
     if len(h_list) == 1:
         logger.error('Wrong hostname name.domain')
         sys.exit(3)
@@ -240,11 +240,11 @@ def add_host(host, ip):
         sys.exit(3)
 
     try:
-        insert_stmt = insert(tables["hostnames"],values={
-            tables["hostnames"].columns["name"] : h_list[0],
-            tables["hostnames"].columns["hostAddressId"] : host_address.id,
-            tables["hostnames"].columns["domainId"] : d.id,
-            tables["hostnames"].columns["lastUpdatedBy"] : user_name
+        insert_stmt = insert(tables["hostnames"], values={
+            tables["hostnames"].columns["name"]: h_list[0],
+            tables["hostnames"].columns["hostAddressId"]: host_address.id,
+            tables["hostnames"].columns["domainId"]: d.id,
+            tables["hostnames"].columns["lastUpdatedBy"]: user_name
         })
         session.execute(insert_stmt)
         session.commit()
@@ -261,22 +261,22 @@ def add_stub(ip, host):
     logger.warning("You are about to add a stub record and intentionally violate the referential integrity of MagDB, you should know why you are doing this, if not hit Ctrl+C now.")
     sleep(5)
 
-    h_list = host.split('.',1)
+    h_list = host.split('.', 1)
     try:
-        insert_stmt = insert(tables["hostAddresses"],values={
-            tables["hostAddresses"].columns["ipAddress"] : ip,
-            tables["hostAddresses"].columns["lastUpdatedBy"] : user_name
+        insert_stmt = insert(tables["hostAddresses"], values={
+            tables["hostAddresses"].columns["ipAddress"]: ip,
+            tables["hostAddresses"].columns["lastUpdatedBy"]: user_name
         })
         ip_id = session.execute(insert_stmt).inserted_primary_key[0]
 
         if ip_id:
             d = session.query(tables["domains"]).filter(tables["domains"].columns["domainName"] == h_list[1]).first()
             if d:
-                insert_stmt = insert(tables["hostnames"],values={
-                    tables["hostnames"].columns["name"] : h_list[0],
-                    tables["hostnames"].columns["hostAddressId"] : ip_id,
-                    tables["hostnames"].columns["domainId"] : d.id,
-                    tables["hostnames"].columns["lastUpdatedBy"] : user_name
+                insert_stmt = insert(tables["hostnames"], values={
+                    tables["hostnames"].columns["name"]: h_list[0],
+                    tables["hostnames"].columns["hostAddressId"]: ip_id,
+                    tables["hostnames"].columns["domainId"]: d.id,
+                    tables["hostnames"].columns["lastUpdatedBy"]: user_name
                 })
                 session.execute(insert_stmt)
                 session.commit()
@@ -301,16 +301,16 @@ def add_alias(alias, host):
         sys.exit(3)
 
 
-    h_list = host.split('.',1)
+    h_list = host.split('.', 1)
     if len(h_list) == 1:
         h_list.append(DEFAULT_DOMAIN)
 
-    hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+    hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
     if not hostname:
         logger.error('Specified hostname does not exist')
         sys.exit(3)
 
-    a_list = alias.split('.',1)
+    a_list = alias.split('.', 1)
     if len(a_list) == 1:
         logger.error('Wrong alias name name.domain')
         sys.exit(3)
@@ -321,20 +321,20 @@ def add_alias(alias, host):
         sys.exit(3)
 
     try:
-        insert_stmt = insert(tables["aliases"],values={
-            tables["aliases"].columns["name"] : a_list[0],
-            tables["aliases"].columns["domainId"] : d.id,
-            tables["hostnames"].columns["lastUpdatedBy"] : user_name
+        insert_stmt = insert(tables["aliases"], values={
+            tables["aliases"].columns["name"]: a_list[0],
+            tables["aliases"].columns["domainId"]: d.id,
+            tables["hostnames"].columns["lastUpdatedBy"]: user_name
         })
         session.execute(insert_stmt)
         session.commit()
 
-        new_alias = session.query(tables['aliases']).filter(tables['aliases'].columns['domainId'] == d.id).filter(tables['aliases'].columns['name'] == a_list[0] ).first()
+        new_alias = session.query(tables['aliases']).filter(tables['aliases'].columns['domainId'] == d.id).filter(tables['aliases'].columns['name'] == a_list[0]).first()
 
-        insert_stmt = insert(tables["hostnamesAliases"],values={
-            tables["hostnamesAliases"].columns["hostnameId"] : hostname.id,
-            tables["hostnamesAliases"].columns["aliasId"] : new_alias.id,
-            tables["hostnames"].columns["lastUpdatedBy"] : user_name
+        insert_stmt = insert(tables["hostnamesAliases"], values={
+            tables["hostnamesAliases"].columns["hostnameId"]: hostname.id,
+            tables["hostnamesAliases"].columns["aliasId"]: new_alias.id,
+            tables["hostnames"].columns["lastUpdatedBy"]: user_name
         })
         session.execute(insert_stmt)
         session.commit()
@@ -351,10 +351,10 @@ def add_interface(mac, name, system):
     try:
         t = tables["networkInterfaces"]
         v = {
-            t.columns["lastUpdatedBy"] : user_name,
-            t.columns["macAddress"] : mac,
-            t.columns["name"] : name,
-            t.columns["systemId"] : system,
+            t.columns["lastUpdatedBy"]: user_name,
+            t.columns["macAddress"]: mac,
+            t.columns["name"]: name,
+            t.columns["systemId"]: system,
         }
         insert_stmt = insert(t, values=v)
         session.execute(insert_stmt)
@@ -370,11 +370,11 @@ def remove_host(target, cascade):
     logger = logging.getLogger("magdb")
 
     if target:
-        h_list = target.split('.',1)
+        h_list = target.split('.', 1)
         if len(h_list) == 1:
             h_list.append(DEFAULT_DOMAIN)
 
-        old_hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
+        old_hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
 
         if old_hostname:
             aliases = session.query(view_aliases).filter(view_aliases.columns["hostnameId"] == old_hostname.id).all()
@@ -383,7 +383,7 @@ def remove_host(target, cascade):
                 logger.info("Hostname has aliases %s" % aliases)
             if not aliases or (aliases and cascade):
                 try:
-                    delete_stmt = delete(tables["hostnames"],tables["hostnames"].columns["id"]==old_hostname.id)
+                    delete_stmt = delete(tables["hostnames"], tables["hostnames"].columns["id"] == old_hostname.id)
                     rowcount = session.execute(delete_stmt).rowcount
                     session.commit()
                     logger.info('Hostname removed, %d row(s) affected' % rowcount)
@@ -402,15 +402,15 @@ def remove_alias(target):
     logger = logging.getLogger("magdb")
 
     if target:
-        h_list = target.split('.',1)
+        h_list = target.split('.', 1)
         if len(h_list) == 1:
             h_list.append(DEFAULT_DOMAIN)
 
-        old_alias = session.query(tables["aliases"]).filter(tables["domains"].columns["id"] == tables["aliases"].columns["domainId"]).filter(tables["domains"].columns["domainName"]==h_list[1]).filter(tables["aliases"].columns["name"] == h_list[0]).first()
+        old_alias = session.query(tables["aliases"]).filter(tables["domains"].columns["id"] == tables["aliases"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["aliases"].columns["name"] == h_list[0]).first()
 
         if old_alias:
             try:
-                delete_stmt = delete(tables["aliases"],tables["aliases"].columns["id"]==old_alias.id)
+                delete_stmt = delete(tables["aliases"], tables["aliases"].columns["id"] == old_alias.id)
                 session.execute(delete_stmt)
                 session.commit()
                 logger.info("Alias removed")
@@ -437,7 +437,7 @@ def remove_ip(target, cascade):
         logger.info("Removing %s" % vn)
         if not vn or (vn and cascade):
             try:
-                delete_stmt = delete(tables["hostAddresses"],tables["hostAddresses"].columns["id"]==old_host_address.id)
+                delete_stmt = delete(tables["hostAddresses"], tables["hostAddresses"].columns["id"] == old_host_address.id)
                 session.execute(delete_stmt)
                 session.commit()
                 logger.info('IPs removed')
@@ -514,7 +514,7 @@ if __name__ == "__main__":
 
     parser.add_argument('mode', choices=['info', 'add', 'remove', 'update'])
     parser.add_argument('context', choices=['host', 'ip', 'alias', 'interface', 'stub'])
-    parser.add_argument("--cascade",action="store_true", dest="cascade", default=False ,help="Casacade deletion of attached objects (hostnames and/or aliases)")
+    parser.add_argument("--cascade", action="store_true", dest="cascade", default=False, help="Casacade deletion of attached objects (hostnames and/or aliases)")
     args = parser.parse_known_args()
 
     mode = args[0].mode
