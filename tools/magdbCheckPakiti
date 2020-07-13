@@ -35,7 +35,7 @@ def main():
 
     # Get list from magDB
     try:
-        conn=psycopg2.connect(CS)
+        conn = psycopg2.connect(CS)
     except:
         print 'Error: Unable to connect to magDB database!'
         print sys.exc_info()[1]
@@ -67,7 +67,7 @@ def main():
 
     # Get list from pakiti
     try:
-        conn=MySQLdb.connect(PAKITI2_HOST, PAKITI2_USER, PAKITI2_PASSWORD, PAKITI2_DBNAME)
+        conn = MySQLdb.connect(PAKITI2_HOST, PAKITI2_USER, PAKITI2_PASSWORD, PAKITI2_DBNAME)
     except:
         print 'Error: Unable to connect to Pakiti database!'
         print sys.exc_info()[1]
@@ -96,14 +96,14 @@ def main():
     if args.format == "html":
         print('<!DOCTYPE HTML><html lang="en"><head><title>MagDB - Pakiti Inconsistencies</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
         print('<div class="head"><h1>MagDB - Pakiti Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
-        print (("<h2>"+INFO_TEXT+"</h2>") % (len(magdb_list)))
+        print(("<h2>" + INFO_TEXT + "</h2>") % (len(magdb_list)))
         table.print_html()
         print("</body></html>");
     elif args.format == "json":
-        print(json.dumps({"aoColumns" : table.fields, "aaData" : table.rows}))
+        print(json.dumps({"aoColumns": table.fields, "aaData": table.rows}))
     else:
         print("MagDB - Pakiti Inconsistencies as of %s" % datetime.datetime.now())
-        print (INFO_TEXT % (len(magdb_list)))
+        print(INFO_TEXT % (len(magdb_list)))
         table.printt(sortby="FQDN")
 
 if __name__ == "__main__":
