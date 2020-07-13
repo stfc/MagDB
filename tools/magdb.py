@@ -63,8 +63,8 @@ class Magdb:
         self.metadata = MetaData()
         self.metadata.reflect(bind=self.engine)
 
-        self.view = Table("vNetwork2", self.metadata, Column("systemId", Integer), Column("macAddress", Integer), Column("ipAddress", Integer, primary_key=True),Column("fqdn", Integer) , autoload_with=self.engine)
-        self.view_aliases = Table("vAliases", self.metadata, Column("hostnameId", Integer, primary_key=True), Column("aliasId", Integer, primary_key=True), Column("alias", String), Column("aliasDomian", String),Column("host", String),Column("hostDomain", String), autoload_with=self.engine)
+        self.view = Table("vNetwork2", self.metadata, Column("systemId", Integer), Column("macAddress", Integer), Column("ipAddress", Integer, primary_key=True), Column("fqdn", Integer), autoload_with=self.engine)
+        self.view_aliases = Table("vAliases", self.metadata, Column("hostnameId", Integer, primary_key=True), Column("aliasId", Integer, primary_key=True), Column("alias", String), Column("aliasDomian", String), Column("host", String), Column("hostDomain", String), autoload_with=self.engine)
 
         self.tables = self.metadata.tables
         self.hostnames = Table('hostnames', self.metadata, autoload=True)
@@ -91,7 +91,7 @@ class Magdb:
 
     def split_fqdn(self, fqdn):
         """Split fqdn into a tuple containing (hostname, domain). If domain not present, appends DEFAULT_DOMAIN"""
-        result = fqdn.split('.',1)
+        result = fqdn.split('.', 1)
         if len(result) == 1:
             result.append(DEFAULT_DOMAIN)
         return((result[0], result[1]))
@@ -99,7 +99,7 @@ class Magdb:
 
     def get_hostname(self, fqdn):
         """"""
-        h_list = fqdn.split('.',1)
+        h_list = fqdn.split('.', 1)
         if len(h_list) == 1:
             raise MagdbError("Incomplete FQDN provided to get_hostname")
         else:
@@ -111,7 +111,7 @@ class Magdb:
                 if h:
                     raise MagdbError("Hostname %s already exists in database" % (hostname))
                 else:
-                    return(h_list[0],d.id)
+                    return(h_list[0], d.id)
 
 
     def info_host(self, fqdn):
@@ -124,7 +124,7 @@ class Magdb:
         if vn:
             result = MagdbRecord(vn[0], vn[1], vn[2], vn[3])
 
-            hostname = self.session.query(self.hostnames).filter(self.domains.columns["id"] == self.hostnames.columns["domainId"]).filter(self.domains.columns["domainName"]==d).filter(self.hostnames.columns["name"] == h).first()
+            hostname = self.session.query(self.hostnames).filter(self.domains.columns["id"] == self.hostnames.columns["domainId"]).filter(self.domains.columns["domainName"] == d).filter(self.hostnames.columns["name"] == h).first()
             aliases = self.session.query(self.view_aliases).filter(self.view_aliases.columns["hostnameId"] == hostname.id).all()
 
             if aliases:
@@ -168,13 +168,13 @@ class Magdb:
         c_h, c_d = self.split_fqdn(current_fqdn)
         current_fqdn = "%s.%s" % (c_h, c_d)
 
-        old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(hostnames.columns["name"] == c_h).first()
+        old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"] == h_list[1]).filter(hostnames.columns["name"] == c_h).first()
         if not old_hostname:
             raise MagdbError("Hostname does not exist")
 
         (new_name, domain_id) = get_hostname(new_fqdn)
 
-        operation = update(hostnames,hostnames.columns["id"]==old_hostname.id, values={hostnames.columns["name"] : new_name, hostnames.columns["domainId"] : domain_id, hostnames.columns["lastUpdatedBy"] : user_name})
+        operation = update(hostnames, hostnames.columns["id"] == old_hostname.id, values={hostnames.columns["name"]: new_name, hostnames.columns["domainId"]: domain_id, hostnames.columns["lastUpdatedBy"]: user_name})
 
         try:
             self.session.execute(operation)
@@ -193,10 +193,10 @@ class Magdb:
 
         try:
             operation = update(hostAddresses,
-                hostAddresses.columns["id"]==old_host_address.id,
+                hostAddresses.columns["id"] == old_host_address.id,
                 values={
-                    hostAddresses.columns["ipAddress"] : new_ip,
-                    hostAddresses.columns["lastUpdatedBy"] : user_name
+                    hostAddresses.columns["ipAddress"]: new_ip,
+                    hostAddresses.columns["lastUpdatedBy"]: user_name
                 }
             )
             self.session.execute(operation)
@@ -215,8 +215,8 @@ class Magdb:
 
         insert_stmt = self.hostAddresses.insert(
             values={
-                self.hostAddresses.columns["ipAddress"] : ip,
-                self.hostAddresses.columns["networkInterfaceId"] : network_inter.id
+                self.hostAddresses.columns["ipAddress"]: ip,
+                self.hostAddresses.columns["networkInterfaceId"]: network_inter.id
             }
         )
 
@@ -234,7 +234,7 @@ class Magdb:
         #    print 'wrong ip address'
         #    return(False)
 
-        h_list = fqdn.split('.',1)
+        h_list = fqdn.split('.', 1)
         if len(h_list) == 1:
             print 'Wrong hostname name.domain'
             return(False)
@@ -247,10 +247,10 @@ class Magdb:
         c = self.hostnames.columns
         insert_stmt = self.hostnames.insert(
             values = {
-                c["name"] : h_list[0],
-                c["hostAddressId"] : host_address.id,
-                c["domainId"] : d.id,
-                c["lastUpdatedBy"] : user_name
+                c["name"]: h_list[0],
+                c["hostAddressId"]: host_address.id,
+                c["domainId"]: d.id,
+                c["lastUpdatedBy"]: user_name
             }
         )
         self.session.execute(insert_stmt)
@@ -259,16 +259,16 @@ class Magdb:
 
     def add_alias(self, fqdn_alias, fqdn_target, user_name):
         """"""
-        h_list = fqdn_target.split('.',1)
+        h_list = fqdn_target.split('.', 1)
         if len(h_list) == 1:
             h_list.append(DEFAULT_DOMAIN)
 
-        hostname = self.session.query(self.tables["hostnames"]).filter(self.tables["domains"].columns["id"] == self.tables["hostnames"].columns["domainId"]).filter(self.tables["domains"].columns["domainName"]==h_list[1]).filter(self.tables["hostnames"].columns["name"] == h_list[0]).first()
+        hostname = self.session.query(self.tables["hostnames"]).filter(self.tables["domains"].columns["id"] == self.tables["hostnames"].columns["domainId"]).filter(self.tables["domains"].columns["domainName"] == h_list[1]).filter(self.tables["hostnames"].columns["name"] == h_list[0]).first()
         if not hostname:
             print 'specified hostname does not exist'
             return(False)
 
-        a_list = fqdn_alias.split('.',1)
+        a_list = fqdn_alias.split('.', 1)
         if len(a_list) == 1:
             print 'Wrong alias name name.domain'
             return(False)
@@ -279,14 +279,14 @@ class Magdb:
             sys.exit(3)
 
         try:
-            insert_stmt = self.tables["aliases"].insert(values={self.tables["aliases"].columns["name"] : a_list[0], self.tables["aliases"].columns["domainId"] : d.id, self.tables["hostnames"].columns["lastUpdatedBy"] : user_name})
+            insert_stmt = self.tables["aliases"].insert(values={self.tables["aliases"].columns["name"]: a_list[0], self.tables["aliases"].columns["domainId"]: d.id, self.tables["hostnames"].columns["lastUpdatedBy"]: user_name})
             print insert_stmt
             self.session.execute(insert_stmt)
             self.session.commit()
 
-            new_alias = self.session.query(self.tables['aliases']).filter(self.tables['aliases'].columns['domainId'] == d.id).filter(self.tables['aliases'].columns['name'] == a_list[0] ).first()
+            new_alias = self.session.query(self.tables['aliases']).filter(self.tables['aliases'].columns['domainId'] == d.id).filter(self.tables['aliases'].columns['name'] == a_list[0]).first()
 
-            insert_stmt = self.tables["hostnamesAliases"].insert(values={self.tables["hostnamesAliases"].columns["hostnameId"] : hostname.id, self.tables["hostnamesAliases"].columns["aliasId"] : new_alias.id, tables["hostnames"].columns["lastUpdatedBy"] : user_name})
+            insert_stmt = self.tables["hostnamesAliases"].insert(values={self.tables["hostnamesAliases"].columns["hostnameId"]: hostname.id, self.tables["hostnamesAliases"].columns["aliasId"]: new_alias.id, tables["hostnames"].columns["lastUpdatedBy"]: user_name})
             print insert_stmt
             self.session.execute(insert_stmt)
             self.session.commit()
@@ -299,11 +299,11 @@ class Magdb:
     def remove_host(self, fqdn, cascade):
         """"""
         if target:
-            h_list = target.split('.',1)
+            h_list = target.split('.', 1)
             if len(h_list) == 1:
                 h_list.append(DEFAULT_DOMAIN)
 
-            old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(hostnames.columns["name"] == h_list[0]).first()
+            old_hostname = self.session.query(hostnames).filter(domains.columns["id"] == hostnames.columns["domainId"]).filter(domains.columns["domainName"] == h_list[1]).filter(hostnames.columns["name"] == h_list[0]).first()
 
             if old_hostname:
 
@@ -311,7 +311,7 @@ class Magdb:
 
                 if not aliases or (aliases and cascade):
                     try:
-                        delete_stmt = delete(hostnames,hostnames.columns["id"]==old_hostname.id)
+                        delete_stmt = delete(hostnames, hostnames.columns["id"] == old_hostname.id)
                         self.session.execute(delete_stmt)
                     except:
                         print "Error on delete"
@@ -327,16 +327,16 @@ class Magdb:
     def remove_alias(self, fqdn):
         """"""
         if fqdn:
-            h_list = fqdn.split('.',1)
+            h_list = fqdn.split('.', 1)
 
             if len(h_list) == 1:
                 h_list.append(DEFAULT_DOMAIN)
 
-            old_alias = self.session.query(aliases).filter(domains.columns["id"] == aliases.columns["domainId"]).filter(domains.columns["domainName"]==h_list[1]).filter(aliases.columns["name"] == h_list[0]).first()
+            old_alias = self.session.query(aliases).filter(domains.columns["id"] == aliases.columns["domainId"]).filter(domains.columns["domainName"] == h_list[1]).filter(aliases.columns["name"] == h_list[0]).first()
 
             if old_alias:
                 try:
-                    delete_stmt = delete(aliases,aliases.columns["id"]==old_alias.id)
+                    delete_stmt = delete(aliases, aliases.columns["id"] == old_alias.id)
                     self.session.execute(delete_stmt)
                 except:
                     print "Error on delete"
@@ -357,7 +357,7 @@ class Magdb:
             vn = self.session.query(view).filter(self.view.columns["ipAddress"] == target).all()
             if not vn or (vn and cascade):
                 try:
-                    delete_stmt = delete(hostAddresses,hostAddresses.columns["id"]==old_host_address.id)
+                    delete_stmt = delete(hostAddresses, hostAddresses.columns["id"] == old_host_address.id)
                     self.session.execute(delete_stmt)
                     return(True)
                 except:
@@ -376,8 +376,8 @@ class Magdb:
         from sqlalchemy.exc import IntegrityError
         c = self.ipSurvey.columns
         v = {
-            c["ipAddress"] : ip,
-            c["lastSeen"] : "now()",
+            c["ipAddress"]: ip,
+            c["lastSeen"]: "now()",
         }
         # Update if already in table, otherwise insert new row
         if self.session.execute(self.ipSurvey.update(c["ipAddress"] == ip, values = v)).rowcount == 0:
