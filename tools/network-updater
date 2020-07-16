@@ -130,6 +130,49 @@ def info_ip(target):
         sys.exit(3)
 
 
+def info_all(system_id):
+    if system_id:
+        system_query = session.query(magdb.systems).filter(tables['systems'].columns['id'] == system_id)
+        system = system_query.first()
+
+        if system:
+            print 'system%d' % system.id
+
+            id_interfaces = []
+            id_addresses = []
+            id_hostnames = []
+
+            interfaces_query = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['systemId'] == system.id)
+            interfaces = interfaces_query.all()
+            if interfaces:
+                for interface in interfaces:
+                    id_interfaces.append(interface.id)
+                    print '\tinterface%d - %s' % (interface.id, interface.name)
+
+                    addresses_query = session.query(magdb.hostAddresses).filter(magdb.hostAddresses.columns['networkInterfaceId'] == interface.id)
+                    addresses = addresses_query.all()
+                    if addresses:
+                        for address in addresses:
+                            id_addresses.append(address.id)
+                            print '\t\taddress%d - %s' % (address.id, address.ipAddress)
+
+                            hostnames_query = session.query(magdb.hostnames).filter(magdb.hostnames.columns['hostAddressId'] == address.id)
+                            hostnames = hostnames_query.all()
+                            if hostnames:
+                                for hostname in hostnames:
+                                    id_hostnames.append(hostname.id)
+                                    domain = session.query(magdb.domains).filter(magdb.domains.columns['id'] == hostname.domainId).first()
+                                    print '\t\t\thostname%d - %s.%s' % (hostname.id, hostname.name, domain.domainName)
+                            else:
+                                print '\t\t\t<No Hostnames>'
+                    else:
+                        print '\t\t<No Addresses>'
+            else:
+                print '\t<No Interfaces>'
+
+        return (id_interfaces, id_addresses, id_hostnames)
+
+
 def update_host(host, new_hostname):
     logger = logging.getLogger("magdb")
 
