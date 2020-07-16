@@ -120,7 +120,7 @@ def info_ip(target):
 
     try:
         vn = session.query(view).filter(view.columns["ipAddress"] == target).all()
-        if vn != None:
+        if vn is not None:
             for v in vn:
                 logger.info("\t%s\t%s\t%s\t%s" % v)
         else:

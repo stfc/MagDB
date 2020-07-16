@@ -43,10 +43,10 @@ def check_dns(table, hostname, ip_address, host_updater, ip_updater):
         ips = []
         reason.append("No Forward DNS")
 
-    if dns_name <> "" and dns_name != hostname:
+    if dns_name and dns_name != hostname:
         reason.append("Reverse DNS Mismatch")
 
-    if ips <> [] and ip_address not in ips:
+    if ips and ip_address not in ips:
         reason.append("IP Mismatch")
 
     if reason:
