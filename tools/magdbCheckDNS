@@ -84,7 +84,7 @@ if __name__ == "__main__":
         print('<div class="head"><h1>MagDB DNS Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
         print(("<h2>"+INFO_TEXT+"</h2>") % (len(host_domain_ip_list)))
         table.print_html(sortby="FQDN In MagDB")
-        print("</body></html>");
+        print("</body></html>")
     elif args.format == "json":
         print(json.dumps({"aoColumns": table.fields, "aaData": table.rows}))
     else:
