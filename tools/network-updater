@@ -190,6 +190,24 @@ def update_ip(ip, new_ip):
         sys.exit(3)
 
 
+def update_interface(mac, name_new):
+    logger = logging.getLogger("magdb")
+
+    interface = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['macAddress'] == mac).first()
+
+    if interface:
+        logger.info('Found interface with name %s' % interface.name)
+        interface = dict(zip(tables["networkInterfaces"].columns, interface))
+        interface['name'] = name_new
+        update_stmt = update(tables["networkInterfaces"], tables["networkInterfaces"].columns["macAddress"] == mac, values=interface)
+        session.execute(update_stmt)
+        session.commit()
+        logger.info('Interface updated')
+    else:
+        logger.error('Specified interface does not exist')
+        sys.exit(3)
+
+
 def add_ip(ip, mac):
     logger = logging.getLogger("magdb")
 
@@ -481,6 +499,7 @@ if __name__ == "__main__":
     add     host6      <fqdn> <ip>
     remove  ip         <ip> [--cascade]
     remove  host       <fqdn>
+    update  interface  <mac> <new name>
     update  ip         <current ip> <new ip>
     update  host       <current fqdn> <new fqdn>
     add     interface  <mac> <name> <system>
@@ -584,3 +603,5 @@ if __name__ == "__main__":
             update_ip(params.target, params.new)
         elif context == 'alias':
             logger.error('Update aliases is not possible, remove the old one and add a new one')
+        elif context == "interface":
+            update_interface(params.target, params.new)
