@@ -469,15 +469,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.usage = """
-    info    ip    <ip>
-    info    host    <fqdn>
-    add    ip    <ip> <mac>
-    add    host    <fqdn> <ip>
-    remove    ip    <ip> [--cascade]
-    remove    host    <fqdn>
-    update    ip    <current ip> <new ip>
-    update    host    <current fqdn> <new fqdn>
-    add    interface    <mac> <name> <system>
+    info    ip         <ip>
+    info    host       <fqdn>
+    add     ip         <ip> <mac>
+    add     host       <fqdn> <ip>
+    remove  ip         <ip> [--cascade]
+    remove  host       <fqdn>
+    update  ip         <current ip> <new ip>
+    update  host       <current fqdn> <new fqdn>
+    add     interface  <mac> <name> <system>
 """
     parser.description = """
     MagDB stores network information as a set of related objects:
