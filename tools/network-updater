@@ -217,7 +217,7 @@ def add_ip(ip, mac):
         sys.exit(3)
 
 
-def add_host(host, ip):
+def add_host(host, ip, record='A'):
     logger = logging.getLogger("magdb")
 
     try:
@@ -244,7 +244,8 @@ def add_host(host, ip):
             tables["hostnames"].columns["name"]: h_list[0],
             tables["hostnames"].columns["hostAddressId"]: host_address.id,
             tables["hostnames"].columns["domainId"]: d.id,
-            tables["hostnames"].columns["lastUpdatedBy"]: user_name
+            tables["hostnames"].columns["lastUpdatedBy"]: user_name,
+            tables["hostnames"].columns["recordType"]: record,
         })
         session.execute(insert_stmt)
         session.commit()
@@ -477,6 +478,7 @@ if __name__ == "__main__":
     info    host       <fqdn>
     add     ip         <ip> <mac>
     add     host       <fqdn> <ip>
+    add     host6      <fqdn> <ip>
     remove  ip         <ip> [--cascade]
     remove  host       <fqdn>
     update  ip         <current ip> <new ip>
@@ -516,7 +518,7 @@ if __name__ == "__main__":
 """
 
     parser.add_argument('mode', choices=['info', 'add', 'remove', 'update'])
-    parser.add_argument('context', choices=['host', 'ip', 'alias', 'interface', 'stub'])
+    parser.add_argument('context', choices=['host', 'host6', 'ip', 'alias', 'interface', 'stub'])
     parser.add_argument("--cascade", action="store_true", dest="cascade", default=False, help="Casacade deletion of attached objects (hostnames and/or aliases)")
     args = parser.parse_known_args()
 
@@ -554,7 +556,9 @@ if __name__ == "__main__":
             params = parser.parse_args(params)
 
             if context == "host":
-                add_host(params.target, params.connector)
+                add_host(params.target, params.connector, 'A')
+            elif context == "host6":
+                add_host(params.target, params.connector, 'AAAA')
             elif context == "ip":
                 add_ip(params.target, params.connector)
             elif context == 'alias':
