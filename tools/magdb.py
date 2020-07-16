@@ -220,7 +220,7 @@ class Magdb:
         if not host_address:
             print 'specified ip address does not exist'
             return(False)
-        #except:
+        # except:
         #    print 'wrong ip address'
         #    return(False)
 
@@ -236,7 +236,7 @@ class Magdb:
 
         c = self.hostnames.columns
         insert_stmt = self.hostnames.insert(
-            values = {
+            values={
                 c["name"]: h_list[0],
                 c["hostAddressId"]: host_address.id,
                 c["domainId"]: d.id,
@@ -365,5 +365,5 @@ class Magdb:
             c["lastSeen"]: "now()",
         }
         # Update if already in table, otherwise insert new row
-        if self.session.execute(self.ipSurvey.update(c["ipAddress"] == ip, values = v)).rowcount == 0:
-            self.session.execute(self.ipSurvey.insert(values = v))
+        if self.session.execute(self.ipSurvey.update(c["ipAddress"] == ip, values=v)).rowcount == 0:
+            self.session.execute(self.ipSurvey.insert(values=v))

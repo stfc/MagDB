@@ -72,7 +72,7 @@ if __name__ == "__main__":
     host_domain_ip_list = cur.fetchall()
     conn.commit()
 
-    #checking DNS entry for all hostnames
+    # checking DNS entry for all hostnames
     if host_domain_ip_list:
         for hostname, domain_name, ip_address, host_updater, ip_updater in host_domain_ip_list:
             check_dns(table, hostname+'.'+domain_name, ip_address, host_updater, ip_updater)
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     if args.format == "html":
         print('<!DOCTYPE HTML><html lang=en><head><title>MagDB DNS Check</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
         print('<div class="head"><h1>MagDB DNS Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
-        print(("<h2>" + INFO_TEXT + "</h2>") % (len(host_domain_ip_list)))
+        print(("<h2>"+INFO_TEXT+"</h2>") % (len(host_domain_ip_list)))
         table.print_html(sortby="FQDN In MagDB")
         print("</body></html>");
     elif args.format == "json":

@@ -137,7 +137,7 @@ def main():
     # Make changes to DB (within transaction)
     c = m.systems.columns
     i = m.systems.insert(
-        values = {
+        values={
             c["vendorId"]: vendor.id,
             c["rackId"]: rack.id,
             c["systemRackUnits"]: units,
@@ -157,7 +157,7 @@ def main():
 
         c = m.networkInterfaces.columns
         i = m.networkInterfaces.insert(
-            values = {
+            values={
                 c["macAddress"]: mac,
                 c["name"]: "eth0",
                 c["systemId"]: system_id,

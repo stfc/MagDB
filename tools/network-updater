@@ -148,7 +148,7 @@ def update_host(host, new_hostname):
 
     logger.info("New hostname %s in domain %s" % (new_name, domain_id))
 
-    update_stmt = update(tables["hostnames"], tables["hostnames"].columns["id"] == old_hostname.id, values = {
+    update_stmt = update(tables["hostnames"], tables["hostnames"].columns["id"] == old_hostname.id, values={
         tables["hostnames"].columns["name"]: new_name,
         tables["hostnames"].columns["domainId"]: domain_id,
         tables["hostnames"].columns["lastUpdatedBy"]: user_name
@@ -177,7 +177,7 @@ def update_ip(ip, new_ip):
         sys.exit(3)
 
     try:
-        update_stmt = update(tables["hostAddresses"], tables["hostAddresses"].columns["id"] == old_host_address.id, values = {
+        update_stmt = update(tables["hostAddresses"], tables["hostAddresses"].columns["id"] == old_host_address.id, values={
             tables["hostAddresses"].columns["ipAddress"]: new_ip,
             tables["hostAddresses"].columns["lastUpdatedBy"]: user_name
         })
