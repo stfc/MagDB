@@ -19,6 +19,7 @@ CS = config.get("database", "psycopg2")
 
 INFO_TEXT = "Checked %d IPs, following errors found:"
 
+
 def check_dns(table, hostname, ip_address, host_updater, ip_updater):
     try:
         name_info = gethostbyaddr(ip_address)
@@ -52,8 +53,6 @@ def check_dns(table, hostname, ip_address, host_updater, ip_updater):
         table.add_row([hostname, ip_address, dns_name, ", ".join(ips), host_updater, ip_updater, ", ".join(reason)])
 
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", dest="format", action="store", choices=["html", "json"], help="Output format")
@@ -72,7 +71,6 @@ if __name__ == "__main__":
     cur.execute("""SELECT name, "domainName", "ipAddress", h."lastUpdatedBy", ha."lastUpdatedBy" FROM hostnames h, domains d, "hostAddresses" ha WHERE h."domainId" = d.id AND h."hostAddressId" = ha.id""")
     host_domain_ip_list = cur.fetchall()
     conn.commit()
-
 
     #checking DNS entry for all hostnames
     if host_domain_ip_list:
@@ -93,5 +91,3 @@ if __name__ == "__main__":
         print("MagDB DNS Status as of %s" % datetime.datetime.now())
         print(INFO_TEXT % (len(host_domain_ip_list)))
         table.printt(sortby="FQDN In MagDB")
-
-

@@ -24,6 +24,7 @@ PAKITI2_PASSWORD = config.get("pakiti", "password")
 PAKITI2_DBNAME = config.get("pakiti", "database")
 INFO_TEXT = "Checked %d records, following errors found:"
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", dest="format", action="store", choices=["html", "json"], help="Output format")
@@ -63,7 +64,6 @@ def main():
             if k not in master_list:
                 master_list[k] = ""
             master_list[k] += "MagDB;%s" % l
-
 
     # Get list from pakiti
     try:
@@ -105,6 +105,7 @@ def main():
         print("MagDB - Pakiti Inconsistencies as of %s" % datetime.datetime.now())
         print(INFO_TEXT % (len(magdb_list)))
         table.printt(sortby="FQDN")
+
 
 if __name__ == "__main__":
     main()

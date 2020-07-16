@@ -300,7 +300,6 @@ def add_alias(alias, host):
         logger.error("This script may not be run as the root user")
         sys.exit(3)
 
-
     h_list = host.split('.', 1)
     if len(h_list) == 1:
         h_list.append(DEFAULT_DOMAIN)

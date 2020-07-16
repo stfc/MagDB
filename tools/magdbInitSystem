@@ -10,8 +10,8 @@ import argparse
 import ConfigParser
 from socket import gethostbyname_ex
 from socket import gethostbyaddr
-
 from magdb_cli_tools import *
+
 
 RE_MAC = re.compile("([a-fA-F0-9]{2}:?){6}")
 RE_FQDN = re.compile("^[a-zA-Z0-9\-.]{1,}$")

@@ -26,6 +26,7 @@ ZONES = config.get("dig", "zones")
 
 INFO_TEXT = "Checked %d records, following errors found:"
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", dest="format", action="store", choices=["html", "json"], help="Output format")
@@ -58,7 +59,6 @@ def main():
     domains = [d[0] for d in domains] # Untuple
     logger.debug("DOMAINS: %s " % (domains))
 
-
     # perform zone transfers
     records = []
     for zone in ZONES
@@ -85,7 +85,6 @@ def main():
                     logger.debug("NOT_A: %s" % r)
             else:
                 logger.debug("NOT_REC: %s" % r)
-
 
     # Get all hostnames with their ips (dns records) from magDB
     magdb_records = m.session.query(m.view.columns["fqdn"], m.view.columns["ipAddress"]).filter('"fqdn" not like \'%.internal\' and not "ipAddress" << \'10.0.0.0/8\'').all()
@@ -138,7 +137,6 @@ def main():
         if len(p) > 1:
             table.add_row([i, s])
 
-
     # Output
     if args.format == "html":
         table.print_html(sortby="FQDN")
@@ -146,6 +144,7 @@ def main():
         print(json.dumps({"aoColumns": table.fields, "aaData": table.rows}))
     else:
         table.printt(sortby="FQDN")
+
 
 if __name__ == "__main__":
     main()
