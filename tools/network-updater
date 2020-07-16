@@ -88,7 +88,7 @@ def info_host(target):
     try:
         vn = session.query(view).filter(view.columns["fqdn"] == h_list[0] + '.' + h_list[1]).first()
         if vn:
-            logger.info("%10s%20s%20s%30s" % vn)
+            logger.info("%10s %20s %20s %30s" % vn)
             hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
             aliases = session.query(view_aliases).filter(view_aliases.columns["hostnameId"] == hostname.id).all()
             if aliases:
