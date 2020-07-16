@@ -434,7 +434,11 @@ def remove_ip(target, cascade):
     if old_host_address:
         vn = session.query(view).filter(view.columns["ipAddress"] == target).all()
         logger.info("Removing %s" % vn)
-        if not vn or (vn and cascade):
+        has_hostnames = False
+        for v in vn:
+            if v.fqdn:
+                has_hostnames = True
+        if not has_hostnames or (has_hostnames and cascade):
             try:
                 delete_stmt = delete(tables["hostAddresses"], tables["hostAddresses"].columns["id"] == old_host_address.id)
                 session.execute(delete_stmt)
