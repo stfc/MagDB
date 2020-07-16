@@ -81,6 +81,7 @@ class Magdb:
         self.categories = self.tables["categories"]
         self.manufacturers = self.tables["manufacturers"]
         self.ipSurvey = self.tables["ipSurvey"]
+        self.storageSystems = self.tables["storageSystems"]
 
         from sqlalchemy.orm import sessionmaker
         Session = sessionmaker(bind=self.engine)
