@@ -361,7 +361,7 @@ def add_interface(mac, name, system):
         logger.info("Interface added")
     except IntegrityError:
         session.rollback()
-        print_exception()
+        printException()
         sys.exit(3)
 
 
