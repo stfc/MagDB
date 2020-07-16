@@ -23,7 +23,7 @@ CS = config.get("database", "sqlalchemy")
 
 
 def main():
-    parser = argparse.ArgumentParser() #"""[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
+    parser = argparse.ArgumentParser()  # """[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
 
     parser.add_argument("--vendor", dest="vendor", help="Name of system vendor")
     parser.add_argument("--rack", dest="rack", help="ID of rack system is in")

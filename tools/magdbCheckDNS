@@ -67,7 +67,7 @@ if __name__ == "__main__":
 
     cur = conn.cursor()
 
-    #selecting all hostnames with their ips from magDB
+    # selecting all hostnames with their ips from magDB
     cur.execute("""SELECT name, "domainName", "ipAddress", h."lastUpdatedBy", ha."lastUpdatedBy" FROM hostnames h, domains d, "hostAddresses" ha WHERE h."domainId" = d.id AND h."hostAddressId" = ha.id""")
     host_domain_ip_list = cur.fetchall()
     conn.commit()
