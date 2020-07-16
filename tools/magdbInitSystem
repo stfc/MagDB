@@ -22,7 +22,7 @@ config.read(['/etc/magdb/magdb.conf'])
 CS = config.get("database", "sqlalchemy")
 
 
-def main():
+def main(user_name):
     parser = argparse.ArgumentParser()  # """[info | add | remove | update] [host | ip | alias] [<hostname> | <ip address>] [<new hostname> | <new ip>] [--cascade]""")
 
     parser.add_argument("--vendor", dest="vendor", help="Name of system vendor")
@@ -145,6 +145,7 @@ def main():
             c["categoryId"]: category.id,
             c["lifestageId"]: 1,
             c["manufacturerId"]: manufacturer.id,
+            c["lastUpdatedBy"]: user_name,
         }
     )
 
@@ -163,6 +164,7 @@ def main():
                 c["systemId"]: system_id,
                 c["networkInterfaceTypeId"]: 2,
                 c["isBootInterface"]: True,
+                c["lastUpdatedBy"]: user_name,
             }
         )
 
@@ -191,7 +193,7 @@ if __name__ == "__main__":
 
     if user.lower() != 'root':
         try:
-            main()
+            main(user)
         except KeyboardInterrupt:
             print("\nINFO: User Aborted")
     else:
