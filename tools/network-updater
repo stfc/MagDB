@@ -20,6 +20,14 @@ global tables
 global hostnames
 
 
+TEXT_DANGER = r'''
+ ___   _   _  _  ___ ___ ___
+|   \ /_\ | \| |/ __| __| _ \
+| |) / _ \| .` | (_ | _||   /
+|___/_/ \_\_|\_|\___|___|_|_\
+'''
+
+
 def sleep(n):
     for i in range(0, n):
         sys.stdout.write("%d..." % (n - i))
@@ -459,6 +467,59 @@ def remove_host(target, cascade):
             sys.exit(3)
 
 
+def remove_system(system_id):
+    logger = logging.getLogger("magdb")
+
+    # magdb.engine.echo = True
+
+    print TEXT_DANGER
+    print 'Think carefully before you go any further, you are about to purge all details of this system from MagDB.'
+    print 'Once you do this, there is no going back!'
+    print
+
+    if system_id:
+        system_query = session.query(magdb.systems).filter(tables['systems'].columns['id'] == system_id)
+        system = system_query.first()
+
+        if system:
+            (id_interfaces, id_addresses, id_hostnames) = info_all(system_id)
+
+            overwatch_record = session.query(magdb.storageSystems).filter(tables['storageSystems'].columns['systemId'] == system.id).first()
+            if overwatch_record:
+                print
+                print 'Overwatch Record'
+                for key, val in zip(tables['storageSystems'].columns, overwatch_record):
+                    if key.name != 'miscComments':
+                        print '%24s %s' % (key.name, val)
+
+            # The scary bit...
+            for id in id_hostnames:
+                session.execute(magdb.hostnames.delete(magdb.hostnames.c.id == id))
+
+            for id in id_addresses:
+                session.execute(magdb.hostAddresses.delete(magdb.hostAddresses.c.id == id))
+
+            for id in id_interfaces:
+                session.execute(magdb.networkInterfaces.delete(magdb.networkInterfaces.c.id == id))
+
+            session.execute(magdb.storageSystems.delete(magdb.storageSystems.c.systemId == system.id))  # Remove Overwatch record
+            session.execute(magdb.systems.delete(magdb.systems.c.id == system.id))
+
+            print
+            print 'Do you wish to continue and delete the above information? (yes/NO)'
+            s = raw_input('> ')
+            if s == 'yes':
+                logger.info('Committing changes...')
+                session.commit()
+                logger.info('DONE')
+            else:
+                logger.info('Cancelling and rolling back transaction...')
+                session.rollback()
+                logger.info('CANCELLED')
+        else:
+            logger.error("System %s not found" % system_id)
+
+
 def remove_alias(target):
     logger = logging.getLogger("magdb")
 
@@ -580,7 +641,7 @@ if __name__ == "__main__":
 """
 
     parser.add_argument('mode', choices=['info', 'add', 'remove', 'update'])
-    parser.add_argument('context', choices=['host', 'host6', 'ip', 'alias', 'interface', 'stub'])
+    parser.add_argument('context', choices=['host', 'host6', 'ip', 'alias', 'interface', 'stub', 'system'])
     parser.add_argument("--cascade", action="store_true", dest="cascade", default=False, help="Casacade deletion of attached objects (hostnames and/or aliases)")
     args = parser.parse_known_args()
 
@@ -636,6 +697,8 @@ if __name__ == "__main__":
             remove_ip(params.target, cascade)
         elif context == 'alias':
             remove_alias(params.target)
+        elif context == 'system':
+            remove_system(params.target)
 
     elif mode == "update":
         parser.add_argument('new')
