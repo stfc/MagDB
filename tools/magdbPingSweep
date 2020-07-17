@@ -18,7 +18,7 @@ def main(subnet=None):
     m = Magdb(CS)
     subnets = m.session.query(m.networkSubnets)
 
-    if subnet <> None:
+    if subnet is not None:
         subnets = subnets.filter(m.networkSubnets.columns["id"] == subnet)
 
     for s in subnets.all():

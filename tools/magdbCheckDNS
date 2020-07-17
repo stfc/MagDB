@@ -43,10 +43,10 @@ def check_dns(table, hostname, ip_address, host_updater, ip_updater):
         ips = []
         reason.append("No Forward DNS")
 
-    if dns_name <> "" and dns_name != hostname:
+    if dns_name and dns_name != hostname:
         reason.append("Reverse DNS Mismatch")
 
-    if ips <> [] and ip_address not in ips:
+    if ips and ip_address not in ips:
         reason.append("IP Mismatch")
 
     if reason:
@@ -84,7 +84,7 @@ if __name__ == "__main__":
         print('<div class="head"><h1>MagDB DNS Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
         print(("<h2>"+INFO_TEXT+"</h2>") % (len(host_domain_ip_list)))
         table.print_html(sortby="FQDN In MagDB")
-        print("</body></html>");
+        print("</body></html>")
     elif args.format == "json":
         print(json.dumps({"aoColumns": table.fields, "aaData": table.rows}))
     else:

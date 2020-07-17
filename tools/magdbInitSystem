@@ -189,7 +189,7 @@ if __name__ == "__main__":
 
     user = getpass.getuser()
 
-    if user.lower() <> 'root':
+    if user.lower() != 'root':
         try:
             main()
         except KeyboardInterrupt:

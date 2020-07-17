@@ -67,7 +67,7 @@ def main():
     dns_records = {}
 
     for r in records:
-        if r and r[0] <> ";" and "CNAME" not in r:
+        if r and r[0] != ";" and "CNAME" not in r:
             r = r.split()
             if len(r) == 5:
                 fqdn, ttl, cl, type, data = r

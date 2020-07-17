@@ -147,7 +147,7 @@ class Magdb:
         """"""
         try:
             vn = self.session.query(view).filter(self.view.columns["ipAddress"] == ip).all()
-            if vn != None:
+            if vn is not None:
                 for v in vn:
                     print("\t%s\t%s\t%s\t%s" % v)
             else:
@@ -184,7 +184,8 @@ class Magdb:
             raise MagdbError("Invalid IP")
 
         try:
-            operation = update(hostAddresses,
+            operation = update(
+                hostAddresses,
                 hostAddresses.columns["id"] == old_host_address.id,
                 values={
                     hostAddresses.columns["ipAddress"]: new_ip,
