@@ -47,14 +47,13 @@ class MagdbError(Exception):
     """Exception class for all Magdb Errors"""
     def __init__(self, value):
         self.value = value
+
     def __str__(self):
         return repr(self.value)
 
 
 class Magdb:
     """Class defining an interface to MagDB"""
-
-
     def __init__(self, conn_string):
         """Create and return a connected Magdb interface object"""
         from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
@@ -88,14 +87,12 @@ class Magdb:
 
         self.session = Session()
 
-
     def split_fqdn(self, fqdn):
         """Split fqdn into a tuple containing (hostname, domain). If domain not present, appends DEFAULT_DOMAIN"""
         result = fqdn.split('.', 1)
         if len(result) == 1:
             result.append(DEFAULT_DOMAIN)
         return((result[0], result[1]))
-
 
     def get_hostname(self, fqdn):
         """"""
@@ -112,7 +109,6 @@ class Magdb:
                     raise MagdbError("Hostname %s already exists in database" % (hostname))
                 else:
                     return(h_list[0], d.id)
-
 
     def info_host(self, fqdn):
         """Return info on specified host and any aliases that target it. Returns None if no host matching fqdn is found."""
@@ -135,7 +131,6 @@ class Magdb:
         else:
             return(None)
 
-
     def info_alias(self, fqdn):
         """"""
         h, d = self.split_fqdn(fqdn)
@@ -147,7 +142,6 @@ class Magdb:
         except:
             print("Alias not found")
             sys.exit(3)
-
 
     def info_ip(self, ip):
         """"""
@@ -161,7 +155,6 @@ class Magdb:
         except:
             print("Invalid IP")
             sys.exit(3)
-
 
     def update_host(self, current_fqdn, new_fqdn):
         """"""
@@ -180,7 +173,6 @@ class Magdb:
             self.session.execute(operation)
         except:
             raise MagdbError("Database operation failed")
-
 
     def update_ip(self, current_ip, new_ip):
         """"""
@@ -203,7 +195,6 @@ class Magdb:
         except:
             raise MagdbError("Dodgy IP while performing DB operation")
 
-
     def add_ip(self, ip, mac):
         """Find interface with specified mac and allocate IP to it, returns nothing, throws MagdbError if problems occur"""
         try:
@@ -223,14 +214,13 @@ class Magdb:
         if self.session.execute(insert_stmt):
             return(True)
 
-
     def add_host(self, fqdn, ip, user_name):
         """"""
         host_address = self.session.query(self.hostAddresses).filter(self.hostAddresses.columns["ipAddress"] == ip).first()
         if not host_address:
             print 'specified ip address does not exist'
             return(False)
-        #except:
+        # except:
         #    print 'wrong ip address'
         #    return(False)
 
@@ -246,7 +236,7 @@ class Magdb:
 
         c = self.hostnames.columns
         insert_stmt = self.hostnames.insert(
-            values = {
+            values={
                 c["name"]: h_list[0],
                 c["hostAddressId"]: host_address.id,
                 c["domainId"]: d.id,
@@ -255,7 +245,6 @@ class Magdb:
         )
         self.session.execute(insert_stmt)
         return(True)
-
 
     def add_alias(self, fqdn_alias, fqdn_target, user_name):
         """"""
@@ -295,7 +284,6 @@ class Magdb:
             print("Error - wrong alias name  %s %s %s" % sys.exc_info())
             return(False)
 
-
     def remove_host(self, fqdn, cascade):
         """"""
         if target:
@@ -323,7 +311,6 @@ class Magdb:
                 print "No such hostname"
                 sys.exit(3)
 
-
     def remove_alias(self, fqdn):
         """"""
         if fqdn:
@@ -343,7 +330,6 @@ class Magdb:
                     sys.exit(3)
             else:
                 return(False)
-
 
     def remove_ip(self, ip, cascade):
         """"""
@@ -370,7 +356,6 @@ class Magdb:
             print "No such IP address in database"
             sys.exit(3)
 
-
     def saw_ip(self, ip):
         """Mark IP as last seen at current timestamp"""
         from sqlalchemy.exc import IntegrityError
@@ -380,5 +365,5 @@ class Magdb:
             c["lastSeen"]: "now()",
         }
         # Update if already in table, otherwise insert new row
-        if self.session.execute(self.ipSurvey.update(c["ipAddress"] == ip, values = v)).rowcount == 0:
-            self.session.execute(self.ipSurvey.insert(values = v))
+        if self.session.execute(self.ipSurvey.update(c["ipAddress"] == ip, values=v)).rowcount == 0:
+            self.session.execute(self.ipSurvey.insert(values=v))

@@ -24,6 +24,7 @@ PAKITI2_PASSWORD = config.get("pakiti", "password")
 PAKITI2_DBNAME = config.get("pakiti", "database")
 INFO_TEXT = "Checked %d records, following errors found:"
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--format", dest="format", action="store", choices=["html", "json"], help="Output format")
@@ -41,7 +42,7 @@ def main():
         print sys.exc_info()[1]
         return False
 
-    #selecting all hostnames with their ips from magDB
+    # selecting all hostnames with their ips from magDB
     cur = conn.cursor()
     cur.execute("""SELECT name || '.' || "domainName", ha."ipAddress", "lastSeen" FROM hostnames h, domains d, "hostAddresses" ha LEFT JOIN "ipSurvey" i on i."ipAddress" = ha."ipAddress" WHERE h."domainId" = d.id AND h."hostAddressId" = ha.id""")
     magdb_list = cur.fetchall()
@@ -64,7 +65,6 @@ def main():
                 master_list[k] = ""
             master_list[k] += "MagDB;%s" % l
 
-
     # Get list from pakiti
     try:
         conn = MySQLdb.connect(PAKITI2_HOST, PAKITI2_USER, PAKITI2_PASSWORD, PAKITI2_DBNAME)
@@ -73,7 +73,7 @@ def main():
         print sys.exc_info()[1]
         return False
 
-    #selecting all hostnames with their ips from pakiti
+    # selecting all hostnames with their ips from pakiti
     cur = conn.cursor()
     cur.execute("""SELECT host, report_ip, time FROM host""")
     pakiti_list = cur.fetchall()
@@ -96,7 +96,7 @@ def main():
     if args.format == "html":
         print('<!DOCTYPE HTML><html lang="en"><head><title>MagDB - Pakiti Inconsistencies</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
         print('<div class="head"><h1>MagDB - Pakiti Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
-        print(("<h2>" + INFO_TEXT + "</h2>") % (len(magdb_list)))
+        print(("<h2>"+INFO_TEXT+"</h2>") % (len(magdb_list)))
         table.print_html()
         print("</body></html>");
     elif args.format == "json":
@@ -105,6 +105,7 @@ def main():
         print("MagDB - Pakiti Inconsistencies as of %s" % datetime.datetime.now())
         print(INFO_TEXT % (len(magdb_list)))
         table.printt(sortby="FQDN")
+
 
 if __name__ == "__main__":
     main()

@@ -6,6 +6,7 @@ import prettytable
 import socket
 from socket import gethostbyname_ex, gethostbyaddr
 
+
 RE_MAC = re.compile("([a-fA-F0-9]{2}:?){6}")
 RE_FQDN = re.compile("^[a-zA-Z0-9\-.]{1,}$")
 
