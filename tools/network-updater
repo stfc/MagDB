@@ -88,7 +88,7 @@ def info_host(target):
     try:
         vn = session.query(view).filter(view.columns["fqdn"] == h_list[0] + '.' + h_list[1]).first()
         if vn:
-            logger.info("%10s%20s%20s%30s" % vn)
+            logger.info("%10s %20s %20s %30s" % vn)
             hostname = session.query(tables["hostnames"]).filter(tables["domains"].columns["id"] == tables["hostnames"].columns["domainId"]).filter(tables["domains"].columns["domainName"] == h_list[1]).filter(tables["hostnames"].columns["name"] == h_list[0]).first()
             aliases = session.query(view_aliases).filter(view_aliases.columns["hostnameId"] == hostname.id).all()
             if aliases:
@@ -361,7 +361,7 @@ def add_interface(mac, name, system):
         logger.info("Interface added")
     except IntegrityError:
         session.rollback()
-        print_exception()
+        printException()
         sys.exit(3)
 
 
@@ -434,7 +434,11 @@ def remove_ip(target, cascade):
     if old_host_address:
         vn = session.query(view).filter(view.columns["ipAddress"] == target).all()
         logger.info("Removing %s" % vn)
-        if not vn or (vn and cascade):
+        has_hostnames = False
+        for v in vn:
+            if v.fqdn:
+                has_hostnames = True
+        if not has_hostnames or (has_hostnames and cascade):
             try:
                 delete_stmt = delete(tables["hostAddresses"], tables["hostAddresses"].columns["id"] == old_host_address.id)
                 session.execute(delete_stmt)
@@ -469,15 +473,15 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.usage = """
-    info    ip    <ip>
-    info    host    <fqdn>
-    add    ip    <ip> <mac>
-    add    host    <fqdn> <ip>
-    remove    ip    <ip> [--cascade]
-    remove    host    <fqdn>
-    update    ip    <current ip> <new ip>
-    update    host    <current fqdn> <new fqdn>
-    add    interface    <mac> <name> <system>
+    info    ip         <ip>
+    info    host       <fqdn>
+    add     ip         <ip> <mac>
+    add     host       <fqdn> <ip>
+    remove  ip         <ip> [--cascade]
+    remove  host       <fqdn>
+    update  ip         <current ip> <new ip>
+    update  host       <current fqdn> <new fqdn>
+    add     interface  <mac> <name> <system>
 """
     parser.description = """
     MagDB stores network information as a set of related objects:

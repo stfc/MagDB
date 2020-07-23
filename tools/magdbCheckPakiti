@@ -94,7 +94,7 @@ def main():
         table.add_row(k.split(";") + v.split(";"))
 
     if args.format == "html":
-        print('<!DOCTYPE HTML><html lang="en"><head><title>MagDB - Pakiti Inconsistencies</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
+        print('<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"><html><head><title>MagDB - Pakiti Inconsistencies</title><link rel="stylesheet" type="text/css" href="info.css"><link rel="icon" href="favicon.png" type="image/png"></head><body>')
         print('<div class="head"><h1>MagDB - Pakiti Inconsistencies as of %s</h1></div>' % datetime.datetime.now())
         print(("<h2>"+INFO_TEXT+"</h2>") % (len(magdb_list)))
         table.print_html()
