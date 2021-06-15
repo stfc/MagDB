@@ -20,6 +20,14 @@ global tables
 global hostnames
 
 
+TEXT_DANGER = r'''
+ ___   _   _  _  ___ ___ ___
+|   \ /_\ | \| |/ __| __| _ \
+| |) / _ \| .` | (_ | _||   /
+|___/_/ \_\_|\_|\___|___|_|_\
+'''
+
+
 def sleep(n):
     for i in range(0, n):
         sys.stdout.write("%d..." % (n - i))
@@ -130,6 +138,49 @@ def info_ip(target):
         sys.exit(3)
 
 
+def info_all(system_id):
+    if system_id:
+        system_query = session.query(magdb.systems).filter(tables['systems'].columns['id'] == system_id)
+        system = system_query.first()
+
+        if system:
+            print 'system%d' % system.id
+
+            id_interfaces = []
+            id_addresses = []
+            id_hostnames = []
+
+            interfaces_query = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['systemId'] == system.id)
+            interfaces = interfaces_query.all()
+            if interfaces:
+                for interface in interfaces:
+                    id_interfaces.append(interface.id)
+                    print '\tinterface%d - %s' % (interface.id, interface.name)
+
+                    addresses_query = session.query(magdb.hostAddresses).filter(magdb.hostAddresses.columns['networkInterfaceId'] == interface.id)
+                    addresses = addresses_query.all()
+                    if addresses:
+                        for address in addresses:
+                            id_addresses.append(address.id)
+                            print '\t\taddress%d - %s' % (address.id, address.ipAddress)
+
+                            hostnames_query = session.query(magdb.hostnames).filter(magdb.hostnames.columns['hostAddressId'] == address.id)
+                            hostnames = hostnames_query.all()
+                            if hostnames:
+                                for hostname in hostnames:
+                                    id_hostnames.append(hostname.id)
+                                    domain = session.query(magdb.domains).filter(magdb.domains.columns['id'] == hostname.domainId).first()
+                                    print '\t\t\thostname%d - %s.%s' % (hostname.id, hostname.name, domain.domainName)
+                            else:
+                                print '\t\t\t<No Hostnames>'
+                    else:
+                        print '\t\t<No Addresses>'
+            else:
+                print '\t<No Interfaces>'
+
+        return (id_interfaces, id_addresses, id_hostnames)
+
+
 def update_host(host, new_hostname):
     logger = logging.getLogger("magdb")
 
@@ -190,6 +241,24 @@ def update_ip(ip, new_ip):
         sys.exit(3)
 
 
+def update_interface(mac, name_new):
+    logger = logging.getLogger("magdb")
+
+    interface = session.query(magdb.networkInterfaces).filter(magdb.networkInterfaces.columns['macAddress'] == mac).first()
+
+    if interface:
+        logger.info('Found interface with name %s' % interface.name)
+        interface = dict(zip(tables["networkInterfaces"].columns, interface))
+        interface['name'] = name_new
+        update_stmt = update(tables["networkInterfaces"], tables["networkInterfaces"].columns["macAddress"] == mac, values=interface)
+        session.execute(update_stmt)
+        session.commit()
+        logger.info('Interface updated')
+    else:
+        logger.error('Specified interface does not exist')
+        sys.exit(3)
+
+
 def add_ip(ip, mac):
     logger = logging.getLogger("magdb")
 
@@ -217,7 +286,7 @@ def add_ip(ip, mac):
         sys.exit(3)
 
 
-def add_host(host, ip):
+def add_host(host, ip, record='A'):
     logger = logging.getLogger("magdb")
 
     try:
@@ -244,7 +313,8 @@ def add_host(host, ip):
             tables["hostnames"].columns["name"]: h_list[0],
             tables["hostnames"].columns["hostAddressId"]: host_address.id,
             tables["hostnames"].columns["domainId"]: d.id,
-            tables["hostnames"].columns["lastUpdatedBy"]: user_name
+            tables["hostnames"].columns["lastUpdatedBy"]: user_name,
+            tables["hostnames"].columns["recordType"]: record,
         })
         session.execute(insert_stmt)
         session.commit()
@@ -397,6 +467,59 @@ def remove_host(target, cascade):
             sys.exit(3)
 
 
+def remove_system(system_id):
+    logger = logging.getLogger("magdb")
+
+    # magdb.engine.echo = True
+
+    print TEXT_DANGER
+    print 'Think carefully before you go any further, you are about to purge all details of this system from MagDB.'
+    print 'Once you do this, there is no going back!'
+    print
+
+    if system_id:
+        system_query = session.query(magdb.systems).filter(tables['systems'].columns['id'] == system_id)
+        system = system_query.first()
+
+        if system:
+            (id_interfaces, id_addresses, id_hostnames) = info_all(system_id)
+
+            overwatch_record = session.query(magdb.storageSystems).filter(tables['storageSystems'].columns['systemId'] == system.id).first()
+            if overwatch_record:
+                print
+                print 'Overwatch Record'
+                for key, val in zip(tables['storageSystems'].columns, overwatch_record):
+                    if key.name != 'miscComments':
+                        print '%24s %s' % (key.name, val)
+
+            # The scary bit...
+            for id in id_hostnames:
+                session.execute(magdb.hostnames.delete(magdb.hostnames.c.id == id))
+
+            for id in id_addresses:
+                session.execute(magdb.hostAddresses.delete(magdb.hostAddresses.c.id == id))
+
+            for id in id_interfaces:
+                session.execute(magdb.networkInterfaces.delete(magdb.networkInterfaces.c.id == id))
+
+            session.execute(magdb.storageSystems.delete(magdb.storageSystems.c.systemId == system.id))  # Remove Overwatch record
+            session.execute(magdb.systems.delete(magdb.systems.c.id == system.id))
+
+            print
+            print 'Do you wish to continue and delete the above information? (yes/NO)'
+            s = raw_input('> ')
+            if s == 'yes':
+                logger.info('Committing changes...')
+                session.commit()
+                logger.info('DONE')
+            else:
+                logger.info('Cancelling and rolling back transaction...')
+                session.rollback()
+                logger.info('CANCELLED')
+        else:
+            logger.error("System %s not found" % system_id)
+
+
 def remove_alias(target):
     logger = logging.getLogger("magdb")
 
@@ -477,8 +600,10 @@ if __name__ == "__main__":
     info    host       <fqdn>
     add     ip         <ip> <mac>
     add     host       <fqdn> <ip>
+    add     host6      <fqdn> <ip>
     remove  ip         <ip> [--cascade]
     remove  host       <fqdn>
+    update  interface  <mac> <new name>
     update  ip         <current ip> <new ip>
     update  host       <current fqdn> <new fqdn>
     add     interface  <mac> <name> <system>
@@ -516,7 +641,7 @@ if __name__ == "__main__":
 """
 
     parser.add_argument('mode', choices=['info', 'add', 'remove', 'update'])
-    parser.add_argument('context', choices=['host', 'ip', 'alias', 'interface', 'stub'])
+    parser.add_argument('context', choices=['host', 'host6', 'ip', 'alias', 'interface', 'stub', 'system'])
     parser.add_argument("--cascade", action="store_true", dest="cascade", default=False, help="Casacade deletion of attached objects (hostnames and/or aliases)")
     args = parser.parse_known_args()
 
@@ -554,7 +679,9 @@ if __name__ == "__main__":
             params = parser.parse_args(params)
 
             if context == "host":
-                add_host(params.target, params.connector)
+                add_host(params.target, params.connector, 'A')
+            elif context == "host6":
+                add_host(params.target, params.connector, 'AAAA')
             elif context == "ip":
                 add_ip(params.target, params.connector)
             elif context == 'alias':
@@ -570,6 +697,8 @@ if __name__ == "__main__":
             remove_ip(params.target, cascade)
         elif context == 'alias':
             remove_alias(params.target)
+        elif context == 'system':
+            remove_system(params.target)
 
     elif mode == "update":
         parser.add_argument('new')
@@ -580,3 +709,5 @@ if __name__ == "__main__":
             update_ip(params.target, params.new)
         elif context == 'alias':
             logger.error('Update aliases is not possible, remove the old one and add a new one')
+        elif context == "interface":
+            update_interface(params.target, params.new)

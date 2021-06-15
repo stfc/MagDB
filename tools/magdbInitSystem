@@ -34,6 +34,7 @@ def main(user_name):
     parser.add_argument("--mac", dest="mac", help="MAC address of eth0 on system")
     parser.add_argument("--ip", dest="ip", help="Desired IP address of system")
     parser.add_argument("--fqdn", dest="fqdn", help="Desired FQDN of system")
+    parser.add_argument("--servicetag", dest="servicetag", help="Service Tag or Serial Number of system (optional)")
 
     args = parser.parse_known_args()
 
@@ -63,6 +64,7 @@ def main(user_name):
     mac = args[0].mac
     ip = unused(m, "IP address", m.hostAddresses, m.hostAddresses.columns["ipAddress"], args[0].ip)
     fqdn = unused(m, "FQDN", m.view, m.view.columns["fqdn"], args[0].fqdn)
+    servicetag = args[0].servicetag
 
     # Vendor
     if not vendor:
@@ -131,6 +133,8 @@ def main(user_name):
     t.add_row(["MAC Address", mac])
     t.add_row(["IP Address", ip])
     t.add_row(["FQDN", fqdn])
+    if servicetag:
+        t.add_row(["serviceTag", servicetag])
     print("INFO: Will commit the following to magDB:")
     t.printt()
 
@@ -146,6 +150,7 @@ def main(user_name):
             c["lifestageId"]: 1,
             c["manufacturerId"]: manufacturer.id,
             c["lastUpdatedBy"]: user_name,
+            c["serviceTag"]: servicetag,
         }
     )
 
